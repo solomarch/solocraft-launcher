@@ -13,19 +13,19 @@ Run one command. **Running the same command again updates to the newest version.
 **Windows – PowerShell**
 
 ```powershell
-irm https://raw.githubusercontent.com/YOUR-USERNAME/solocraft-launcher/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/solomarch/solocraft-launcher/main/install.ps1 | iex
 ```
 
 **Windows – Command Prompt (cmd)**
 
 ```bat
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/YOUR-USERNAME/solocraft-launcher/main/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/solomarch/solocraft-launcher/main/install.ps1 | iex"
 ```
 
 **Linux (x86_64)**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR-USERNAME/solocraft-launcher/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/solomarch/solocraft-launcher/main/install.sh | bash
 ```
 
 What the commands do:
@@ -80,7 +80,7 @@ plus Toggle Sprint and Fullbright. *Edit HUD Layout* lets you drag every element
 You need Node.js 20+, Rust (stable) and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/solocraft-launcher.git
+git clone https://github.com/solomarch/solocraft-launcher.git
 cd solocraft-launcher
 npm install
 npm run tauri dev        # run in development

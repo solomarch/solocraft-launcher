@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # SoloCraft Launcher - install or update (Linux, x86_64)
-#   curl -fsSL https://raw.githubusercontent.com/YOUR-USERNAME/solocraft-launcher/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/solomarch/solocraft-launcher/main/install.sh | bash
 # Running it again updates to the newest release. SOLOCRAFT_FORCE=1 reinstalls.
 set -euo pipefail
 
-REPO="${SOLOCRAFT_REPO:-YOUR-USERNAME/solocraft-launcher}"
+REPO="${SOLOCRAFT_REPO:-solomarch/solocraft-launcher}"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 INSTALL_DIR="$DATA_HOME/solocraft-launcher"
 BIN_DIR="$HOME/.local/bin"
