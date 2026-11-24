@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "solocraft-client",
+  "version": "${version}",
+  "name": "SoloCraft Client",
+  "description": "In-game menu and HUD for SoloCraft Launcher: FPS, CPS, keystrokes, coordinates and more. Press Right Shift.",
+  "authors": ["SoloCraft"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": { "client": ["dev.solocraft.client.SoloClient"] },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "${mc_range}",
+    "java": ">=${java_min}",
+    "fabric-api": "*"
+  }
+}
