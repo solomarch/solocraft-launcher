@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, DeviceCode, errText, Settings } from "../lib/api";
 import { useApp } from "../store/app";
 import { Icon } from "./Icon";
 import { StorageCard } from "./Storage";
+import { useUpdate } from "./UpdateBanner";
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return <button className={"toggle" + (on ? " on" : "")} onClick={() => onChange(!on)} aria-pressed={on} />;
@@ -23,20 +24,14 @@ export function SettingsPage() {
   const setActive = useApp((s) => s.setActiveAccount);
   const removeAccount = useApp((s) => s.removeAccount);
   const toast = useApp((s) => s.toast);
+  const upd = useUpdate();
   const [username, setUsername] = useState("");
   const [newGroup, setNewGroup] = useState("");
-  const [clientId, setClientId] = useState(settings.msClientId ?? "");
   const [device, setDevice] = useState<DeviceCode | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
 
-  const [builtin, setBuiltin] = useState(false);
-  useEffect(() => {
-    api.msHasBuiltin().then(setBuiltin).catch(() => setBuiltin(false));
-  }, []);
-
   const startMs = async () => {
     try {
-      if (clientId.trim() !== (settings.msClientId ?? "")) await save({ msClientId: clientId.trim() });
       const d = await api.msBeginLogin();
       setDevice(d);
       const accounts = await api.msFinishLogin(d);
@@ -121,35 +116,8 @@ export function SettingsPage() {
           <div className="muted" style={{ margin: "3px 0 6px" }}>
             Needed for online servers. Sign-in is just a code: SoloCraft shows you a code, you type it on the page shown, in any browser (a private window keeps your other logins untouched).
           </div>
-          {!builtin && (
-          <details className="msguide">
-            <summary>One-time setup: get the app ID (about 5 minutes)</summary>
-            <ol>
-              <li>Open a private/incognito window and go to portal.azure.com → App registrations → New registration.</li>
-              <li>Name: SoloCraft. Account type: “Personal Microsoft accounts only”. Leave Redirect URI empty. Register.</li>
-              <li>Authentication → Advanced settings → “Allow public client flows” = Yes → Save.</li>
-              <li>Copy “Application (client) ID” from the Overview page and paste it below.</li>
-              <li>
-                Ask Mojang to allow your app: fill the form at https://aka.ms/AppRegInfo. Until they approve it
-                (it can take days), sign-in ends with a 403 message. This step is Microsoft's rule for every
-                launcher and cannot be skipped.
-              </li>
-            </ol>
-            You only do this once; afterwards every account on this PC signs in with just a code.
-          </details>
-          )}
           <div className="row wrap">
-            {!builtin && (
-            <input
-              type="text"
-              placeholder="Azure application (client) ID"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              onBlur={() => clientId.trim() !== (settings.msClientId ?? "") && save({ msClientId: clientId.trim() })}
-              style={{ width: 300 }}
-            />
-            )}
-            <button className="btn primary" onClick={startMs} disabled={!!device || (!builtin && clientId.trim() === "")}>
+            <button className="btn primary" onClick={startMs} disabled={!!device}>
               Sign in with Microsoft
             </button>
           </div>
@@ -303,6 +271,29 @@ export function SettingsPage() {
           <button className="btn" onClick={addGroup}>
             <Icon name="plus" /> Add group
           </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h3>Updates</h3>
+        <div style={{ marginBottom: 8 }}>
+          {upd.error
+            ? "Could not check for updates right now."
+            : !upd.info
+            ? "Checking…"
+            : upd.info.available
+            ? `Version ${upd.info.latest} is available (you have ${upd.info.current}).`
+            : `You are up to date (version ${upd.info.current}).`}
+        </div>
+        <div className="row">
+          <button className="btn" onClick={upd.check} disabled={upd.checking}>
+            {upd.checking ? "Checking…" : "Check for updates"}
+          </button>
+          {upd.info?.available && (
+            <button className="btn primary" onClick={() => api.openUpdatePage(upd.info!.downloadUrl).catch(() => undefined)}>
+              Download update
+            </button>
+          )}
         </div>
       </div>
 

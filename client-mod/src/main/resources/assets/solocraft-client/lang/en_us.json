@@ -1,4 +1,5 @@
 {
   "key.solocraft.menu": "Open SoloCraft menu",
-  "category.solocraft": "SoloCraft Client"
+  "category.solocraft": "SoloCraft Client",
+  "key.category.solocraft.main": "SoloCraft Client"
 }

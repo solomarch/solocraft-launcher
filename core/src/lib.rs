@@ -1,3 +1,4 @@
+pub mod booster;
 pub mod clientmod;
 pub mod diagnose;
 pub mod download;
@@ -17,6 +18,7 @@ pub mod models;
 pub mod paths;
 pub mod storage;
 pub mod store;
+pub mod update;
 pub mod versions;
 
 pub use engine::Engine;

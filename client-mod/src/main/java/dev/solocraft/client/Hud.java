@@ -4,11 +4,27 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Shared drawing helpers and the HUD pass. */
 public final class Hud {
     private Hud() {}
+
+    /** Modules that threw an error on this Minecraft version are switched off for the session. */
+    private static final Set<Module> BROKEN = new HashSet<>();
+
+    public static boolean isBroken(Module m) {
+        return BROKEN.contains(m);
+    }
+
+    public static void markBroken(Module m, Throwable t) {
+        if (BROKEN.add(m)) {
+            SoloClient.LOG.error("Module '{}' does not work on this Minecraft version and was switched off: {}", m.name, t.toString());
+            Chat.error("a feature does not fit this Minecraft version and was switched off: " + m.name);
+        }
+    }
 
     public static TextRenderer tr() {
         return MinecraftClient.getInstance().textRenderer;
@@ -19,18 +35,24 @@ public final class Hud {
         MinecraftClient mc = MinecraftClient.getInstance();
         int sw = mc.getWindow().getScaledWidth();
         int sh = mc.getWindow().getScaledHeight();
-        float s = Config.get().scale;
+        float s = Gfx.canScale() ? Config.get().scale : 1f;
         // Modules the player has not moved are stacked automatically so nothing overlaps.
         int flowX = 4, flowY = 4, colW = 0;
         for (Module m : Modules.ALL) {
-            if (!m.hasHud || !m.isEnabled()) continue;
+            if (!m.hasHud || !m.isEnabled() || isBroken(m)) continue;
             boolean placed = m.hasSavedPos();
             int x = placed ? Math.max(0, Math.min(m.x(), sw - 10)) : flowX;
             int y = placed ? Math.max(0, Math.min(m.y(), sh - 10)) : flowY;
-            c.getMatrices().push();
-            c.getMatrices().scale(s, s, 1f);
-            int[] size = m.draw(c, Math.round(x / s), Math.round(y / s), editing);
-            c.getMatrices().pop();
+            int[] size;
+            Gfx.pushScale(c, s);
+            try {
+                size = m.draw(c, Math.round(x / s), Math.round(y / s), editing);
+            } catch (Throwable t) {
+                markBroken(m, t);
+                continue;
+            } finally {
+                Gfx.pop(c);
+            }
             m.lastX = x;
             m.lastY = y;
             m.lastW = Math.round(size[0] * s);
@@ -58,7 +80,7 @@ public final class Hud {
         int bh = lines.size() * lh + pad * 2 - 1;
         if (Config.get().background) c.fill(x, y, x + bw, y + bh, 0x90000000);
         for (int i = 0; i < lines.size(); i++) {
-            c.drawText(t, lines.get(i), x + pad, y + pad + i * lh, 0xFFFFFFFF, Config.get().shadow);
+            Gfx.text(c, t, lines.get(i), x + pad, y + pad + i * lh, 0xFFFFFFFF, Config.get().shadow);
         }
         return new int[]{bw, bh};
     }

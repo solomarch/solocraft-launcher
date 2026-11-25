@@ -89,7 +89,7 @@ public final class Modules {
                 Hud.round(c, x, y, w, h, col);
                 if (!label.isEmpty()) {
                     int tw = Hud.tr().getWidth(label);
-                    c.drawText(Hud.tr(), label, x + (w - tw) / 2, y + (h - Hud.tr().fontHeight) / 2 + 1, 0xFFFFFFFF, Config.get().shadow);
+                    Gfx.text(c, Hud.tr(), label, x + (w - tw) / 2, y + (h - Hud.tr().fontHeight) / 2 + 1, 0xFFFFFFFF, Config.get().shadow);
                 }
             }
         });
@@ -121,7 +121,7 @@ public final class Modules {
                     if (st.isDamageable()) t = String.valueOf(st.getMaxDamage() - st.getDamage());
                     else if (st.getCount() > 1) t = "x" + st.getCount();
                     if (!t.isEmpty()) {
-                        c.drawText(Hud.tr(), t, x + 19, ry + 4, 0xFFFFFFFF, Config.get().shadow);
+                        Gfx.text(c, Hud.tr(), t, x + 19, ry + 4, 0xFFFFFFFF, Config.get().shadow);
                         maxW = Math.max(maxW, Hud.tr().getWidth(t) + 19);
                     }
                     maxW = Math.max(maxW, 18);
@@ -213,20 +213,51 @@ public final class Modules {
         });
 
         ALL.add(new Module("fullbright", "Fullbright", "Makes everything fully lit, even in caves.", "Mechanic", false, false, 0, 0) {
-            private Double saved;
+            private Object saved;
+            private java.lang.reflect.Field fld;
+
+            private java.lang.reflect.Field field(Object opt) {
+                if (fld == null) {
+                    for (java.lang.reflect.Field f : opt.getClass().getDeclaredFields()) {
+                        if (!java.lang.reflect.Modifier.isStatic(f.getModifiers()) && !java.lang.reflect.Modifier.isFinal(f.getModifiers())
+                                && f.getType() == Object.class) {
+                            f.setAccessible(true);
+                            fld = f;
+                            break;
+                        }
+                    }
+                }
+                return fld;
+            }
+
+            @Override
+            public void stop(MinecraftClient mc) {
+                try {
+                    Object opt = mc.options.getGamma();
+                    java.lang.reflect.Field f = field(opt);
+                    if (f != null && saved != null) {
+                        f.set(opt, saved);
+                        saved = null;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
 
             @Override
             public void tick(MinecraftClient mc) {
                 try {
+                    Object opt = mc.options.getGamma();
+                    java.lang.reflect.Field f = field(opt);
+                    if (f == null) return;
                     if (isEnabled()) {
-                        if (saved == null) saved = mc.options.getGamma().getValue();
-                        if (mc.options.getGamma().getValue() < 15.0) mc.options.getGamma().setValue(16.0);
+                        if (saved == null) saved = f.get(opt);
+                        f.set(opt, 16.0);
                     } else if (saved != null) {
-                        mc.options.getGamma().setValue(saved);
+                        f.set(opt, saved);
                         saved = null;
                     }
                 } catch (Exception ignored) {
-                    // keep the game running even if the option rejects the value
+                    // keep the game running
                 }
             }
         });

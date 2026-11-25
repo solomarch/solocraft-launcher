@@ -9,10 +9,19 @@ use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-/// Minecraft versions the mod is written for.
-pub const SUPPORTED_MC: [&str; 12] = [
-    "1.20", "1.20.1", "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6", "1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4",
-];
+/// Minecraft 1.20.x versions that have their own jar.
+const OLD_MC: [&str; 7] = ["1.20", "1.20.1", "1.20.2", "1.20.3", "1.20.4", "1.20.5", "1.20.6"];
+/// Name tag of the one jar that works on every 1.21.x version.
+const UNIVERSAL: &str = "1.21.x";
+
+fn is_121(mc: &str) -> bool {
+    mc == "1.21" || mc.starts_with("1.21.")
+}
+
+/// True when the mod can run on this Minecraft version (Fabric only).
+pub fn supports(mc: &str) -> bool {
+    OLD_MC.contains(&mc) || is_121(mc)
+}
 const FILE: &str = "solocraft-client.jar";
 
 #[derive(Debug, Clone, Serialize)]
@@ -28,7 +37,11 @@ pub struct Status {
 /// Newest jar in `dir` built for exactly this Minecraft version
 /// (file name `solocraft-client-<mc>-<version>.jar`).
 fn pick_jar(dir: &Path, mc: &str) -> Option<PathBuf> {
-    let prefix = format!("solocraft-client-{mc}-");
+    pick_named(dir, mc).or_else(|| if is_121(mc) { pick_named(dir, UNIVERSAL) } else { None })
+}
+
+fn pick_named(dir: &Path, tag: &str) -> Option<PathBuf> {
+    let prefix = format!("solocraft-client-{tag}-");
     let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
     for e in std::fs::read_dir(dir).ok()?.flatten() {
         let n = e.file_name().to_string_lossy().to_string();
@@ -89,14 +102,32 @@ fn target(paths: &Paths, id: &str) -> PathBuf {
     paths.game_dir(id).join("mods").join(FILE)
 }
 
+/// Before the game starts: when SoloCraft Client is installed and a different build of it is found
+/// (for example after you rebuilt the mod), copy the newer one in. Returns true when it was updated.
+pub fn refresh(paths: &Paths, inst: &Instance) -> bool {
+    let dest = target(paths, &inst.id);
+    if !dest.exists() {
+        return false; // not installed (or switched off): leave it alone
+    }
+    let Some(jar) = find_jar(paths, &inst.mc_version) else { return false };
+    let same = match (std::fs::read(&jar), std::fs::read(&dest)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => true,
+    };
+    if same {
+        return false;
+    }
+    std::fs::copy(&jar, &dest).is_ok()
+}
+
 pub fn status(paths: &Paths, inst: &Instance) -> Status {
     let jar_found = find_jar(paths, &inst.mc_version).is_some();
-    let supported = inst.loader == "fabric" && SUPPORTED_MC.contains(&inst.mc_version.as_str());
+    let supported = inst.loader == "fabric" && supports(&inst.mc_version);
     let installed = target(paths, &inst.id).exists() || target(paths, &inst.id).with_extension("jar.disabled").exists();
     let reason = if !supported {
-        format!("Needs a Fabric instance on Minecraft {} (this one is {} {}).", SUPPORTED_MC.join(", "), inst.loader, inst.mc_version)
+        format!("Needs a Fabric instance on Minecraft 1.20 - 1.21.x (this one is {} {}).", inst.loader, inst.mc_version)
     } else if !jar_found && !installed {
-        format!("No SoloCraft Client file for Minecraft {v} yet. Run build-all.ps1 -Versions {v} in the client-mod folder.", v = inst.mc_version)
+        format!("No SoloCraft Client file for Minecraft {v} yet. Run build-all.ps1 in the client-mod folder.", v = inst.mc_version)
     } else {
         String::new()
     };
@@ -146,6 +177,12 @@ mod tests {
         assert!(pick_jar(&d, "1.21.4").unwrap().ends_with("solocraft-client-1.21.4-1.0.0.jar"));
         assert!(pick_jar(&d, "1.20.1").unwrap().ends_with("solocraft-client-1.20.1-1.0.0.jar"));
         assert!(pick_jar(&d, "1.20.4").is_none());
+        // the universal jar serves every 1.21.x, an exact jar wins when present
+        std::fs::write(d.join("solocraft-client-1.21.x-1.0.0.jar"), "x").unwrap();
+        assert!(pick_jar(&d, "1.21.11").unwrap().ends_with("solocraft-client-1.21.x-1.0.0.jar"));
+        assert!(pick_jar(&d, "1.21.4").unwrap().ends_with("solocraft-client-1.21.4-1.0.0.jar"));
+        assert!(pick_jar(&d, "1.20.6").is_none());
+        assert!(supports("1.21.10") && supports("1.20.2") && !supports("1.19.4") && !supports("26.1"));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 [package]
 name = "solocraft-core"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 description = "SoloCraft Launcher core: instances, Java, downloads and game launching (no GUI dependencies)"
 

@@ -66,4 +66,8 @@ public abstract class Module {
     public int[] draw(DrawContext c, int x, int y, boolean editing) {
         return new int[]{0, 0};
     }
+
+    /** Called when the game is closing; modules undo temporary changes here. */
+    public void stop(net.minecraft.client.MinecraftClient mc) {
+    }
 }

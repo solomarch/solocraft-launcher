@@ -9,7 +9,10 @@ file("versions/${mcv}.properties").withInputStream { vp.load(it) }
 
 version = project.mod_version
 group = 'dev.solocraft'
-base { archivesName = "solocraft-client-${mcv}" }
+// -Ptag=1.21.x names the jar for a whole range; -Prange=~1.21 sets the Minecraft versions the jar accepts
+def tag = (project.findProperty('tag') ?: mcv).toString()
+def mcRange = (project.findProperty('range') ?: vp.getProperty('mcrange')).toString()
+base { archivesName = "solocraft-client-${tag}" }
 
 sourceSets {
     main { java { srcDir "src/compat/${vp.getProperty('compat')}/java" } }
@@ -25,9 +28,10 @@ dependencies {
 processResources {
     inputs.property 'version', project.version
     inputs.property 'mc', mcv
+    inputs.property 'range', mcRange
     filesMatching('fabric.mod.json') {
         expand 'version': project.version,
-               'mc_range': vp.getProperty('mcrange'),
+               'mc_range': mcRange,
                'java_min': vp.getProperty('java')
     }
 }

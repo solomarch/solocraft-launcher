@@ -54,7 +54,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mc: ['1.20', '1.20.1', '1.20.2', '1.20.3', '1.20.4', '1.20.5', '1.20.6', '1.21', '1.21.1', '1.21.2', '1.21.3', '1.21.4']
+        include:
+          - { mc: '1.21.4', tag: '1.21.x', range: '~1.21' }   # one jar for every 1.21.x
+          - { mc: '1.20', tag: '1.20', range: '' }
+          - { mc: '1.20.1', tag: '1.20.1', range: '' }
+          - { mc: '1.20.2', tag: '1.20.2', range: '' }
+          - { mc: '1.20.3', tag: '1.20.3', range: '' }
+          - { mc: '1.20.4', tag: '1.20.4', range: '' }
+          - { mc: '1.20.5', tag: '1.20.5', range: '' }
+          - { mc: '1.20.6', tag: '1.20.6', range: '' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -66,7 +74,9 @@ jobs:
         run: |
           chmod +x gradlew
           bash tools/make-props.sh "${{ matrix.mc }}"
-          ./gradlew build -Pmc="${{ matrix.mc }}" --no-daemon
+          RANGE=""
+          if [ -n "${{ matrix.range }}" ]; then RANGE="-Prange=${{ matrix.range }}"; fi
+          ./gradlew build -Pmc="${{ matrix.mc }}" -Ptag="${{ matrix.tag }}" $RANGE --no-daemon
       - name: Attach to the release
         working-directory: client-mod
         env:

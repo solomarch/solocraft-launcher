@@ -16,7 +16,8 @@ public final class Config {
     public Map<String, Boolean> enabled = new HashMap<>();
     public Map<String, int[]> positions = new HashMap<>();
     public Set<String> favourites = new HashSet<>();
-    public float scale = 1.0f;
+    public float scale = 1.25f;      // HUD size
+    public float menuScale = 1.5f;   // size of the menu window
     public boolean shadow = true;
     public boolean background = true;
     public int accent = 0;
@@ -44,7 +45,8 @@ public final class Config {
                     if (c.enabled == null) c.enabled = new HashMap<>();
                     if (c.positions == null) c.positions = new HashMap<>();
                     if (c.favourites == null) c.favourites = new HashSet<>();
-                    if (c.scale < 0.5f || c.scale > 2.0f) c.scale = 1.0f;
+                    if (c.scale < 0.5f || c.scale > 2.0f) c.scale = 1.25f;
+                    if (c.menuScale < 0.8f || c.menuScale > 2.5f) c.menuScale = 1.5f;
                     if (c.accent < 0 || c.accent >= ACCENTS.length) c.accent = 0;
                     instance = c;
                 }

@@ -1,12 +1,12 @@
 # SoloCraft Launcher - install or update (Windows PowerShell 5.1+ and PowerShell 7)
-#   irm https://raw.githubusercontent.com/YOUR-USERNAME/solocraft-launcher/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/solomarch/solocraft-launcher/main/install.ps1 | iex
 # Running it again updates to the newest release. Set SOLOCRAFT_FORCE=1 to reinstall.
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
 $Repo = $env:SOLOCRAFT_REPO
-if (-not $Repo) { $Repo = "YOUR-USERNAME/solocraft-launcher" }
+if (-not $Repo) { $Repo = "solomarch/solocraft-launcher" }
 $Headers = @{ "User-Agent" = "solocraft-installer" }
 
 Write-Host "SoloCraft Launcher - looking for the latest version ..." -ForegroundColor Cyan

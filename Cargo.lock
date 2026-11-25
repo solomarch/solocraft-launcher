@@ -3510,7 +3510,7 @@ dependencies = [
 
 [[package]]
 name = "solocraft-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3537,7 +3537,7 @@ dependencies = [
 
 [[package]]
 name = "solocraft-launcher"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "open",

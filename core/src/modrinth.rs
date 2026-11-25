@@ -35,7 +35,7 @@ pub fn loader_filter(loader: &str) -> Vec<&'static str> {
 /// Mods that raise FPS without changing gameplay. Installed best effort:
 /// anything without a build for the instance's Minecraft version is skipped.
 // Cull Leaves was dropped: it patches renderer internals and breaks on new versions.
-pub const FPS_STACK: [&str; 8] = [
+pub const FPS_STACK: [&str; 9] = [
     "sodium",
     "sodium-extra",
     "lithium",
@@ -44,6 +44,7 @@ pub const FPS_STACK: [&str; 8] = [
     "immediatelyfast",
     "entityculling",
     "moreculling",
+    "dynamic-fps",
 ];
 
 // ---------- API types (serialize camelCase for the UI, accept Modrinth's snake_case) ----------

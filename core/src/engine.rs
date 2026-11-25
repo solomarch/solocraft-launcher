@@ -163,6 +163,9 @@ impl Engine {
                 crate::forge::ensure_installed(&paths, &inst.loader, &inst.mc_version, &lv, &j.path, &*sink, id).await?;
             }
         }
+        if crate::clientmod::refresh(&paths, &inst) {
+            log_info(&*sink, id, "[SoloCraft] Updated SoloCraft Client to the newest build".to_string());
+        }
         emit_state(&*sink, id, "preparing", "Reading version data");
         let (version, loader_ver) = loaders::load_effective_version(&paths, &inst).await?;
         if !loader_ver.is_empty() {
@@ -237,21 +240,22 @@ impl Engine {
         emit_state(&*sink, id, "running", "Minecraft is running");
         let started = std::time::Instant::now();
         let mut killed = false;
+        let pid = child.id();
         let status = tokio::select! {
             s = child.wait() => s?,
             r = &mut kill_rx => {
                 if r.is_ok() {
                     killed = true;
+                    kill_tree(pid);
                     let _ = child.kill().await;
                 }
                 child.wait().await?
             }
         };
-        if let Some(h) = h_out {
-            let _ = h.await;
-        }
-        if let Some(h) = h_err {
-            let _ = h.await;
+        // A helper process left behind by the game can keep the output pipes open
+        // forever, which used to leave the instance stuck on "Running".
+        for h in [h_out, h_err].into_iter().flatten() {
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(3), h).await;
         }
 
         // Record play time against the latest saved copy of the instance.
@@ -277,5 +281,22 @@ impl Engine {
             emit_state(&*sink, id, "crashed", &msg);
         }
         Ok(())
+    }
+}
+
+/// Ends the game process and anything it started (Windows keeps children alive otherwise).
+fn kill_tree(pid: Option<u32>) {
+    let Some(pid) = pid else { return };
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .creation_flags(0x0800_0000)
+            .status();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("kill").args(["-9", &pid.to_string()]).status();
     }
 }

@@ -2,12 +2,13 @@
 
 In-game menu and HUD for SoloCraft Launcher. Press **Right Shift** in game.
 
-Supported Minecraft versions (Fabric): 1.20 up to 1.21.4. Not yet: 1.21.5 and newer, 26.x.
+Supported (Fabric): **one jar for every Minecraft 1.21.x (1.21 up to 1.21.11)**, plus separate jars for 1.20 - 1.20.6.
+Not yet: 26.x.
 
 ## Build (needs JDK 21 active; internet for the first build)
 
-    .\build-all.ps1          builds every version into .\dist  (PowerShell)
-    .\gradlew.bat build -Pmc=1.21.4      one version only
+    .\build-all.ps1          builds the ONE jar for all 1.21.x into .\dist  (PowerShell)
+    .\build-all.ps1 -Versions 1.20.1,1.20.4    older versions, one jar each
 
 SoloCraft Launcher finds the jars in `client-mod\dist` by itself
 (Mods window -> SoloCraft Client -> Install). If a version fails to build, the script

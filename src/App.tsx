@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { UpdateBanner, useUpdate } from "./components/UpdateBanner";
 import { useApp } from "./store/app";
 import { TopBar } from "./components/TopBar";
 import { Home } from "./components/Home";
@@ -31,6 +32,7 @@ export default function App() {
 
   const [firstRun, setFirstRun] = useState<StorageInfo | null>(null);
   const toast = useApp((s) => s.toast);
+  const upd = useUpdate();
 
   useEffect(() => {
     void init();
@@ -58,6 +60,7 @@ export default function App() {
   return (
     <div className="app">
       <TopBar />
+      <UpdateBanner info={upd.info} />
       <div className="main">
         {page === "home" && <Home />}
         {page === "instances" && <InstancesPage />}

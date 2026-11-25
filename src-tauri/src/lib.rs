@@ -3,6 +3,7 @@ use solocraft_core::models::{
     AccountStore, GameState, Instance, JavaInstall, LogLine, Progress, Settings, VersionEntry,
 };
 use solocraft_core::models::LoaderVersion;
+use solocraft_core::booster::{self, BoostReport, Plan};
 use solocraft_core::modrinth::{self, FpsReport, ModEntry, ModUpdate, PlannedMod, Project, SearchQuery, SearchResult, Version};
 use solocraft_core::msauth::{self, DeviceCode};
 use solocraft_core::{java, loaders, versions, Engine, Paths};
@@ -352,6 +353,32 @@ async fn install_fps_pack(app: AppHandle, state: State<'_, AppState>, id: String
 }
 
 #[tauri::command(rename_all = "camelCase")]
+async fn booster_plan(state: State<'_, AppState>, id: String, tier: Option<String>) -> Res<Plan> {
+    let inst = state.engine.store.get_instance(&id).map_err(err)?;
+    let paths = state.engine.paths().clone();
+    tokio::task::spawn_blocking(move || booster::plan_for(&paths, &inst, tier.as_deref())).await.map_err(err)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn booster_apply(app: AppHandle, state: State<'_, AppState>, id: String, tier: Option<String>) -> Res<BoostReport> {
+    if state.engine.is_running(&id) {
+        return Err("Stop the game before using the FPS Booster".into());
+    }
+    let inst = state.engine.store.get_instance(&id).map_err(err)?;
+    let sink = TauriSink(app);
+    booster::apply(state.engine.paths(), &state.engine.store, &inst, tier.as_deref(), &sink).await.map_err(err)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn booster_undo(state: State<'_, AppState>, id: String) -> Res<()> {
+    if state.engine.is_running(&id) {
+        return Err("Stop the game before undoing the FPS Booster".into());
+    }
+    let inst = state.engine.store.get_instance(&id).map_err(err)?;
+    booster::undo(state.engine.paths(), &state.engine.store, &inst).map_err(err)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn set_mod_enabled(state: State<'_, AppState>, id: String, filename: String, enabled: bool) -> Res<()> {
     if state.engine.is_running(&id) {
         return Err("Stop the game before changing mods".into());
@@ -443,6 +470,19 @@ fn open_login_page(url: String) -> Res<()> {
         .any(|p| url.starts_with(p));
     if !ok {
         return Err("Refusing to open a non-Microsoft address".into());
+    }
+    open::that(url).map_err(err)
+}
+
+#[tauri::command]
+async fn check_update() -> Res<solocraft_core::update::UpdateInfo> {
+    solocraft_core::update::check(env!("CARGO_PKG_VERSION")).await.map_err(err)
+}
+
+#[tauri::command]
+fn open_update_page(url: String) -> Res<()> {
+    if !solocraft_core::update::url_allowed(&url) {
+        return Err("Refusing to open an address outside the SoloCraft repository".into());
     }
     open::that(url).map_err(err)
 }
@@ -592,6 +632,9 @@ pub fn run() {
             plan_mod_install,
             install_mod,
             install_fps_pack,
+            booster_plan,
+            booster_apply,
+            booster_undo,
             set_mod_enabled,
             remove_mod,
             check_mod_updates,
@@ -601,6 +644,8 @@ pub fn run() {
             ms_cancel_login,
             ms_verify,
             open_login_page,
+            check_update,
+            open_update_page,
             storage_info,
             storage_usage,
             storage_preview,

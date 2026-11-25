@@ -3,6 +3,7 @@ import { api, ClientModStatus, errText, ModEntry, ModUpdate, PlannedMod, SearchH
 import { progressPct } from "../lib/format";
 import { isActive, useApp } from "../store/app";
 import { Icon } from "../components/Icon";
+import { Booster } from "../components/Booster";
 import { compact, MrIcon } from "../components/MrIcon";
 
 function fmtSize(n: number): string {
@@ -27,6 +28,7 @@ export function ModsModal() {
   const [filter, setFilter] = useState("");
   const [cm, setCm] = useState<ClientModStatus | null>(null);
   const [cmBusy, setCmBusy] = useState(false);
+  const [showBoost, setShowBoost] = useState(false);
 
   const loadCm = useCallback(async () => {
     if (!id) return;
@@ -169,19 +171,6 @@ export function ModsModal() {
       setUpdates([]);
     });
 
-  const fps = () =>
-    guard("fps", async () => {
-      const r = await api.installFpsPack(inst.id);
-      toast(
-        r.installed.length > 0
-          ? `Installed ${r.installed.length} FPS mod${r.installed.length === 1 ? "" : "s"}` +
-              (r.skipped.length ? `. Not available for ${inst.mcVersion}: ${r.skipped.join(", ")}` : "")
-          : r.skipped.length > 0
-            ? `No FPS mods are available for ${inst.mcVersion} yet`
-            : "The FPS mods are already installed",
-      );
-    });
-
   const askInstall = (hit: SearchHit) =>
     guard("plan:" + hit.projectId, async () => {
       const items = await api.planModInstall(inst.id, hit.projectId);
@@ -291,10 +280,12 @@ export function ModsModal() {
                   <button className="btn" onClick={checkUpdates} disabled={working || running}>
                     <Icon name="refresh" /> Check for updates
                   </button>
-                  <button className="btn" onClick={fps} disabled={working || running} title="Sodium, Sodium Extra, Lithium, FerriteCore, ModernFix, ImmediatelyFast, Entity Culling, More Culling">
-                    <Icon name="bolt" /> Add FPS boost pack
+                  <button className="btn primary" onClick={() => setShowBoost((v) => !v)} title="Installs the FPS mods and tunes settings for this PC">
+                    <Icon name="bolt" /> FPS Booster
                   </button>
                 </div>
+
+                {showBoost && inst && <Booster instId={inst.id} running={running} onDone={() => void refresh()} />}
 
                 {updates && updates.length > 0 && (
                   <div className="card" style={{ marginBottom: 8 }}>

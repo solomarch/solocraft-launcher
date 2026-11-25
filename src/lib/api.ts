@@ -180,6 +180,32 @@ export interface FpsReport {
   skipped: string[];
 }
 
+export interface Hardware {
+  ramMb: number;
+  threads: number;
+  gpu: string;
+  discreteGpu: boolean;
+}
+
+export interface BoostPlan {
+  tier: string;
+  recommended: string;
+  hardware: Hardware;
+  minRamMb: number;
+  maxRamMb: number;
+  jvmArgs: string;
+  options: [string, string][];
+  renderDistance: number;
+  simulationDistance: number;
+  alreadyBoosted: boolean;
+}
+
+export interface BoostReport {
+  plan: BoostPlan;
+  mods: FpsReport | null;
+  notes: string[];
+}
+
 export interface SearchArgs {
   query: string;
   projectType: "mod" | "modpack";
@@ -229,7 +255,18 @@ export interface LogFile {
   modified: number;
 }
 
+export interface UpdateInfo {
+  available: boolean;
+  current: string;
+  latest: string;
+  pageUrl: string;
+  downloadUrl: string;
+  notes: string;
+}
+
 export const api = {
+  checkUpdate: () => invoke<UpdateInfo>("check_update"),
+  openUpdatePage: (url: string) => invoke<void>("open_update_page", { url }),
   msBeginLogin: () => invoke<DeviceCode>("ms_begin_login"),
   msFinishLogin: (device: DeviceCode) => invoke<AccountStore>("ms_finish_login", { device }),
   msCancelLogin: () => invoke<void>("ms_cancel_login"),
@@ -278,6 +315,9 @@ export const api = {
   listMods: (id: string) => invoke<ModEntry[]>("list_mods", { id }),
   planModInstall: (id: string, projectId: string) => invoke<PlannedMod[]>("plan_mod_install", { id, projectId }),
   installMod: (id: string, projectId: string) => invoke<PlannedMod[]>("install_mod", { id, projectId }),
+  boosterPlan: (id: string, tier: string | null) => invoke<BoostPlan>("booster_plan", { id, tier }),
+  boosterApply: (id: string, tier: string | null) => invoke<BoostReport>("booster_apply", { id, tier }),
+  boosterUndo: (id: string) => invoke<void>("booster_undo", { id }),
   installFpsPack: (id: string) => invoke<FpsReport>("install_fps_pack", { id }),
   setModEnabled: (id: string, filename: string, enabled: boolean) =>
     invoke<void>("set_mod_enabled", { id, filename, enabled }),

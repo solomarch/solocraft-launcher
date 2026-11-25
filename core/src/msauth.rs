@@ -122,7 +122,7 @@ fn require_client_id(id: &str) -> Result<&str> {
     let id = id.trim();
     if id.is_empty() {
         return Err(anyhow!(
-            "Microsoft sign-in needs an Azure application (client) ID. Add it in Settings → Accounts."
+            "Microsoft sign-in has no client ID in this build (no app ID was compiled in). Please update SoloCraft to the latest version."
         ));
     }
     Ok(id)
@@ -395,8 +395,15 @@ pub async fn ensure_token(store: &Store, acc: &Account) -> Result<(String, McSes
 
 /// Client ID baked in at build time (`SOLOCRAFT_MS_CLIENT_ID=... cargo build`).
 pub fn builtin_client_id() -> &'static str {
-    option_env!("SOLOCRAFT_MS_CLIENT_ID").unwrap_or("")
+    match option_env!("SOLOCRAFT_MS_CLIENT_ID") {
+        Some(v) if !v.trim().is_empty() => v,
+        _ => DEFAULT_CLIENT_ID,
+    }
 }
+
+/// SoloCraft's own Azure app registration (public client; the ID is not a secret).
+/// Paste the "Application (client) ID" between the quotes.
+const DEFAULT_CLIENT_ID: &str = "";
 
 /// The ID in use: the user's own setting wins, otherwise the built-in one.
 pub fn effective_client_id(store: &Store) -> String {
