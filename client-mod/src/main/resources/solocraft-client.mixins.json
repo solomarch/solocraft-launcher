@@ -1,0 +1,8 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "dev.solocraft.client.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "client": ["CameraMixin", "EntityMixin", "InGameHudMixin"],
+  "injectors": { "defaultRequire": 0 }
+}

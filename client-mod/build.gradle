@@ -1,0 +1,44 @@
+plugins {
+    id 'fabric-loom' version '1.9-SNAPSHOT'
+}
+
+// Pick the Minecraft version with  -Pmc=1.20.1  (default 1.21.4). Settings live in versions/<mc>.properties
+def mcv = (project.findProperty('mc') ?: '1.21.4').toString()
+def vp = new Properties()
+file("versions/${mcv}.properties").withInputStream { vp.load(it) }
+
+version = project.mod_version
+group = 'dev.solocraft'
+// -Ptag=1.21.x names the jar for a whole range; -Prange=~1.21 sets the Minecraft versions the jar accepts
+def tag = (project.findProperty('tag') ?: mcv).toString()
+def mcRange = (project.findProperty('range') ?: vp.getProperty('mcrange')).toString()
+base { archivesName = "solocraft-client-${tag}" }
+
+sourceSets {
+    main { java { srcDir "src/compat/${vp.getProperty('compat')}/java" } }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${mcv}"
+    mappings "net.fabricmc:yarn:${vp.getProperty('yarn')}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${vp.getProperty('loader')}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${vp.getProperty('fabric')}"
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'mc', mcv
+    inputs.property 'range', mcRange
+    filesMatching('fabric.mod.json') {
+        expand 'version': project.version,
+               'mc_range': mcRange,
+               'java_min': vp.getProperty('java')
+    }
+}
+
+def javaLevel = Integer.parseInt(vp.getProperty('java'))
+tasks.withType(JavaCompile).configureEach { options.release = javaLevel }
+java {
+    sourceCompatibility = JavaVersion.toVersion(javaLevel)
+    targetCompatibility = JavaVersion.toVersion(javaLevel)
+}

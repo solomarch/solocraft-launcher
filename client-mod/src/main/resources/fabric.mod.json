@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "solocraft-client",
+  "version": "${version}",
+  "name": "SM Craft Client",
+  "description": "In-game menu and HUD for SM Craft: FPS, CPS, keystrokes, coordinates and more. Press Right Shift.",
+  "authors": ["SM Craft"],
+  "license": "MIT",
+  "environment": "client",
+  "mixins": ["solocraft-client.mixins.json"],
+  "entrypoints": { "client": ["dev.solocraft.client.SoloClient"] },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "${mc_range}",
+    "java": ">=${java_min}",
+    "fabric-api": "*"
+  }
+}

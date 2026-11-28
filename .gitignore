@@ -1,0 +1,18 @@
+node_modules/
+dist/
+target/
+src-tauri/gen/
+*.part
+.DS_Store
+
+# mod build output (CI builds these; never commit them)
+client-mod/build/
+client-mod/.gradle/
+client-mod/dist/
+client-mod/versions/*.properties
+*.jar
+!client-mod/gradle/wrapper/gradle-wrapper.jar
+
+# never commit accounts or tokens
+ms_secrets.json
+*.env
