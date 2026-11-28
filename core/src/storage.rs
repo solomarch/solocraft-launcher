@@ -51,7 +51,12 @@ fn read_pointer() -> Option<PathBuf> {
 pub fn write_pointer(dir: &Path) -> Result<()> {
     std::fs::create_dir_all(config_dir())?;
     let p = Pointer { data_dir: dir.to_string_lossy().to_string() };
-    std::fs::write(pointer_file(), serde_json::to_vec_pretty(&p)?)?;
+    let path = pointer_file();
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, serde_json::to_vec_pretty(&p)?)?;
+    #[cfg(windows)]
+    if path.exists() { std::fs::remove_file(&path)?; }
+    std::fs::rename(&tmp, &path)?;
     Ok(())
 }
 
@@ -254,11 +259,20 @@ pub fn move_data(old: &Path, target: &Path, progress: &dyn Fn(u64, u64)) -> Resu
         }
     };
     let new_files = WalkDir::new(target).into_iter().flatten().filter(|e| e.file_type().is_file()).count() as u64;
-    if new_files != files || dir_size(target) != copied {
+    let hashes_match = WalkDir::new(old).into_iter().flatten().filter(|e| e.file_type().is_file()).all(|e| {
+        let rel = match e.path().strip_prefix(old) { Ok(r) => r, Err(_) => return false };
+        let dest = target.join(rel);
+        std::fs::metadata(e.path()).ok().map(|m| m.len()) == std::fs::metadata(&dest).ok().map(|m| m.len())
+            && crate::download::file_sha256(e.path()).ok() == crate::download::file_sha256(&dest).ok()
+    });
+    if new_files != files || dir_size(target) != copied || !hashes_match {
         let _ = std::fs::remove_dir_all(target);
         return Err(anyhow!("The copy could not be verified, so nothing was changed"));
     }
-    write_pointer(target)?;
+    if let Err(e) = write_pointer(target) {
+        let _ = std::fs::remove_dir_all(target);
+        return Err(e);
+    }
     let _ = std::fs::remove_dir_all(old);
     Ok(())
 }

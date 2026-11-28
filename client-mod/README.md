@@ -5,6 +5,10 @@ In-game menu and HUD for SoloCraft Launcher. Press **Right Shift** in game.
 Supported (Fabric): **one jar for every Minecraft 1.21.x (1.21 up to 1.21.11)**, plus separate jars for 1.20 - 1.20.6.
 Not yet: 26.x.
 
+The in-game menu (Right Shift) is translucent over the blurred world. See [FEATURES.md](FEATURES.md) for implemented modules and the remaining safe feature plan.
+
+FPS Companion Max is integrated into the SM Craft Client menu: Performance includes an opt-in 12+ chunk Max FPS Profile, a rolling 10-second average/1% low/frame-time HUD, and detected optimization-mod reporting. These run inside the SM Craft Client jar; the separate FPS Companion Max jar is not needed alongside it.
+
 ## Build (needs JDK 21 active; internet for the first build)
 
     .\build-all.ps1          builds the ONE jar for all 1.21.x into .\dist  (PowerShell)

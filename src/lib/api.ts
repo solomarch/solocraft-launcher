@@ -22,6 +22,18 @@ export interface Instance {
   playTimeSecs: number;
 }
 
+export interface ServerConfig {
+  onlineMode: boolean;
+  port: number;
+  maxPlayers: number;
+  eulaAccepted: boolean;
+}
+
+export interface ServerInternetInfo {
+  lanIp: string | null;
+  publicIp: string | null;
+}
+
 export interface Settings {
   theme: "sm-night" | "sm-day";
   accent: string;
@@ -197,6 +209,19 @@ export interface Hardware {
   discreteGpu: boolean;
 }
 
+export interface SystemReport {
+  os: string;
+  architecture: string;
+  processor: string;
+  physicalCores: number;
+  graphicsDrivers: string;
+  hardware: Hardware;
+  availableRamMb: number;
+  freeDiskMb: number | null;
+  java: JavaInstall[];
+  diagnoses: string[];
+}
+
 export interface BoostPlan {
   tier: string;
   recommended: string;
@@ -322,6 +347,14 @@ export interface Shot {
 }
 
 export const api = {
+  serverConfig: (id: string) => invoke<ServerConfig>("server_config", { id }),
+  saveServerConfig: (id: string, config: ServerConfig) => invoke<void>("save_server_config", { id, config }),
+  startServer: (id: string) => invoke<void>("start_server", { id }),
+  stopServer: (id: string) => invoke<boolean>("stop_server", { id }),
+  serverRunning: (id: string) => invoke<boolean>("server_running", { id }),
+  serverInternetInfo: () => invoke<ServerInternetInfo>("server_internet_info"),
+  openServerFolder: (id: string) => invoke<void>("open_server_folder", { id }),
+  systemScan: () => invoke<SystemReport>("system_scan"),
   accountSkin: (uuid: string, kind: string) => invoke<SkinInfo>("account_skin", { uuid, kind }),
   minecraftNews: () => invoke<NewsItem[]>("minecraft_news"),
   playtimeWeek: () => invoke<DayPlay[]>("playtime_week"),

@@ -10,6 +10,9 @@ use serde::Deserialize;
 use std::io::Read;
 use std::path::Path;
 
+const MAX_ARCHIVE_OUTPUT: u64 = 8 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES: usize = 100_000;
+
 #[derive(Debug, PartialEq)]
 pub enum Kind {
     Modrinth,
@@ -108,6 +111,7 @@ async fn import_prism(
         let (f, pre) = (file.to_path_buf(), prefix.to_string());
         tokio::task::spawn_blocking(move || -> Result<(MmcPack, String)> {
             let mut zip = zip::ZipArchive::new(std::fs::File::open(f)?)?;
+            if zip.len() > MAX_ARCHIVE_ENTRIES { return Err(anyhow!("archive contains too many entries")); }
             let mut s = String::new();
             zip.by_name(&format!("{pre}mmc-pack.json"))?.read_to_string(&mut s)?;
             let pack: MmcPack = serde_json::from_str(&s).context("mmc-pack.json is damaged")?;
@@ -135,8 +139,10 @@ async fn import_prism(
     let (f, pre, g) = (file.to_path_buf(), prefix.to_string(), game_dir);
     let res = tokio::task::spawn_blocking(move || -> Result<usize> {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(f)?)?;
+        if zip.len() > MAX_ARCHIVE_ENTRIES { return Err(anyhow!("archive contains too many entries")); }
         let roots = [format!("{pre}.minecraft/"), format!("{pre}minecraft/")];
         let mut n = 0;
+        let mut expanded = 0u64;
         for i in 0..zip.len() {
             let mut e = zip.by_index(i)?;
             let name = e.name().to_string();
@@ -145,6 +151,8 @@ async fn import_prism(
                 continue;
             }
             let Some(rel) = safe_rel(rest) else { continue };
+            expanded = expanded.saturating_add(e.size());
+            if expanded > MAX_ARCHIVE_OUTPUT { return Err(anyhow!("archive expands beyond the 8 GiB safety limit")); }
             let out = g.join(rel);
             if let Some(p) = out.parent() {
                 std::fs::create_dir_all(p)?;

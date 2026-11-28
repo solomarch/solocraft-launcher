@@ -37,7 +37,10 @@ pub struct AssetIndexRef {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Downloads {
+    #[serde(default)]
     pub client: Option<Artifact>,
+    #[serde(default)]
+    pub server: Option<Artifact>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

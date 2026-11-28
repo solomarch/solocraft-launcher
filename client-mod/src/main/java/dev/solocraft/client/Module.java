@@ -7,7 +7,7 @@ public abstract class Module {
     public final String id;
     public final String name;
     public final String description;
-    public final String category; // "HUD" or "Mechanic"
+    public final String category; // HUD, Visual, Utility, or Performance
     public final boolean defaultOn;
     public final boolean hasHud;
     public final int defX, defY;
@@ -69,5 +69,21 @@ public abstract class Module {
 
     /** Called when the game is closing; modules undo temporary changes here. */
     public void stop(net.minecraft.client.MinecraftClient mc) {
+    }
+}
+
+/** A one-shot menu card; unlike a switch, it performs an action and does not claim ongoing state. */
+final class ActionModule extends Module {
+    private final java.util.function.Function<net.minecraft.client.MinecraftClient, String> action;
+
+    ActionModule(String id, String name, String description, String category,
+                 java.util.function.Function<net.minecraft.client.MinecraftClient, String> action) {
+        super(id, name, description, category, false, false, 0, 0);
+        this.action = action;
+    }
+
+    void run(net.minecraft.client.MinecraftClient mc) {
+        try { Chat.info(action.apply(mc)); }
+        catch (Throwable t) { SoloClient.LOG.warn("Action {} failed", id, t); Chat.error("could not apply " + name + ": " + Chat.brief(t)); }
     }
 }

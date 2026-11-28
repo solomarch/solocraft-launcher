@@ -18,10 +18,11 @@ import java.util.List;
  */
 public class MenuScreen extends Screen {
     private static final int BASE_W = 540, BASE_H = 340;
-    private static final int BG = 0xF0141418;
-    private static final int PANEL = 0xFF1B1B21;
-    private static final int CARD = 0xFF202027;
-    private static final int CARD_HOVER = 0xFF26262E;
+    // Alpha stays below 0xFF so the blurred game world remains visible through every menu layer.
+    private static final int BG = 0xD0141418;
+    private static final int PANEL = 0xD51B1B21;
+    private static final int CARD = 0xC8202027;
+    private static final int CARD_HOVER = 0xD526262E;
     private static final int TEXT = 0xFFE6E6EA;
     private static final int MUTED = 0xFF8B8B96;
 
@@ -171,18 +172,18 @@ public class MenuScreen extends Screen {
         int cx = px + pw - 18;
         Gfx.text(c, tr, "x", cx, py + 11, MUTED, false);
         hits.add(new Hit(cx - 4, py + 6, 18, 18, this::close));
-        c.fill(px + 1, py + 28, px + pw - 1, py + 29, 0xFF2A2A32);
+        c.fill(px + 1, py + 28, px + pw - 1, py + 29, 0xBB2A2A32);
 
         // sidebar
         int sy = py + 38;
-        String[] cats = {"All", "Favourites", "HUD", "Mechanic"};
-        String[] labels = {"All Mods", "Favourites", "HUD", "Mechanic"};
+        String[] cats = {"All", "Favourites", "HUD", "Visual", "Utility", "Performance"};
+        String[] labels = {"All Features", "Favourites", "HUD", "Visual", "Utility", "Performance"};
         for (int i = 0; i < cats.length; i++) {
             final String cat = cats[i];
             boolean on = tab == Tab.MODS && category.equals(cat);
             int bx = px + 8, bw = 104;
             boolean hov = mx >= bx && mx < bx + bw && my >= sy && my < sy + 20;
-            if (on || hov) Hud.round(c, bx, sy, bw, 20, on ? PANEL : 0xFF18181D);
+            if (on || hov) Hud.round(c, bx, sy, bw, 20, on ? PANEL : 0xB518181D);
             Gfx.text(c, tr, labels[i], bx + 8, sy + 6, on ? TEXT : MUTED, false);
             String n = String.valueOf(count(cat));
             Gfx.text(c, tr, n, bx + bw - 8 - tr.getWidth(n), sy + 6, MUTED, false);
@@ -226,7 +227,7 @@ public class MenuScreen extends Screen {
 
     private void drawSearch(DrawContext c, TextRenderer tr, int accent) {
         int x = px + 126, y = py + 38, w = pw - 126 - 14, h = 18;
-        Hud.round(c, x, y, w, h, 0xFF101014);
+        Hud.round(c, x, y, w, h, 0xC8101014);
         if (searchFocused) Gfx.border(c, x, y, w, h, accent);
         String t = search.text.toString();
         if (t.isEmpty() && !searchFocused) {
@@ -244,7 +245,7 @@ public class MenuScreen extends Screen {
         boolean on = tab == t;
         boolean hov = mx >= x && mx < x + w && my >= y && my < y + 18;
         if (on) Hud.round(c, x, y, w, 18, CARD);
-        else if (hov) Hud.round(c, x, y, w, 18, 0xFF18181D);
+        else if (hov) Hud.round(c, x, y, w, 18, 0xB518181D);
         Gfx.text(c, tr, label, x + 10, y + 5, on ? TEXT : MUTED, false);
         hits.add(new Hit(x, y, w, 18, () -> { tab = t; scrollRows = 0; }));
         return x + w + 4;
@@ -273,17 +274,28 @@ public class MenuScreen extends Screen {
             for (int l = 0; l < Math.min(2, lines.size()); l++) {
                 Gfx.text(c, tr, lines.get(l), x + 8, y + 20 + l * 10, MUTED, false);
             }
-            boolean on = m.isEnabled();
+            boolean action = m instanceof ActionModule;
+            boolean on = !action && m.isEnabled();
             int tw = 22, th = 10, tx2 = x + cw - tw - 8, ty = y + 7;
-            Hud.round(c, tx2, ty, tw, th, on ? accent : 0xFF3A3A44);
-            int kx = on ? tx2 + tw - th + 1 : tx2 + 1;
-            c.fill(kx, ty + 1, kx + th - 2, ty + th - 1, 0xFFFFFFFF);
+            if (action) {
+                String actionLabel = "APPLY";
+                int aw = tr.getWidth(actionLabel) + 10;
+                Hud.round(c, tx2 - aw + tw, ty - 1, aw, th + 2, accent);
+                Gfx.text(c, tr, actionLabel, tx2 - aw + tw + 5, ty + 1, TEXT, false);
+            } else {
+                Hud.round(c, tx2, ty, tw, th, on ? accent : 0xFF3A3A44);
+                int kx = on ? tx2 + tw - th + 1 : tx2 + 1;
+                c.fill(kx, ty + 1, kx + th - 2, ty + th - 1, 0xFFFFFFFF);
+            }
             boolean fav = Config.get().favourites.contains(m.id);
             Gfx.text(c, tr, fav ? "★" : "☆", x + 8, y + chh - 13, fav ? 0xFFFFD166 : MUTED, false);
             final Module mod = m;
             hits.add(new Hit(x, y, cw, chh, () -> {
-                mod.setEnabled(!mod.isEnabled());
-                Config.save();
+                if (mod instanceof ActionModule actionModule) actionModule.run(MinecraftClient.getInstance());
+                else {
+                    mod.setEnabled(!mod.isEnabled());
+                    Config.save();
+                }
             }));
             hits.add(new Hit(x, y + chh - 16, 20, 16, () -> {
                 if (!Config.get().favourites.remove(mod.id)) Config.get().favourites.add(mod.id);
@@ -341,7 +353,7 @@ public class MenuScreen extends Screen {
 
     private void smallButton(DrawContext c, TextRenderer tr, int x, int y, String s, int mx, int my, Runnable a) {
         boolean hov = mx >= x && mx < x + 18 && my >= y && my < y + 18;
-        Hud.round(c, x, y, 18, 18, hov ? 0xFF33333D : 0xFF2A2A32);
+        Hud.round(c, x, y, 18, 18, hov ? 0xD533333D : 0xBB2A2A32);
         Gfx.text(c, tr, s, x + (18 - tr.getWidth(s)) / 2, y + 5, TEXT, false);
         hits.add(new Hit(x, y, 18, 18, a));
     }

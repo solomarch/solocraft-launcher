@@ -7,6 +7,7 @@ use solocraft_core::booster::{self, BoostReport, Plan};
 use solocraft_core::modrinth::{self, FpsReport, ModEntry, ModUpdate, PlannedMod, Project, SearchQuery, SearchResult, Version};
 use solocraft_core::msauth::{self, DeviceCode};
 use solocraft_core::{java, loaders, versions, Engine, Paths};
+use solocraft_core::server::{self, ServerConfig, ServerHost};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
@@ -15,6 +16,7 @@ struct AppState {
     first_run: bool,
     storage_warning: Option<String>,
     ms_cancel: Arc<std::sync::atomic::AtomicBool>,
+    servers: Arc<ServerHost>,
 }
 
 struct TauriSink(AppHandle);
@@ -63,8 +65,8 @@ fn update_instance(state: State<'_, AppState>, instance: Instance) -> Res<()> {
 
 #[tauri::command]
 fn delete_instance(state: State<'_, AppState>, id: String) -> Res<()> {
-    if state.engine.is_running(&id) {
-        return Err("Stop the game before deleting this instance".into());
+    if state.engine.is_running(&id) || state.servers.is_busy(&id) {
+        return Err("Stop the game and server before deleting this instance".into());
     }
     state.engine.store.delete_instance(&id).map_err(err)
 }
@@ -142,8 +144,57 @@ fn running_instances(state: State<'_, AppState>) -> Vec<String> {
     state.engine.running_ids()
 }
 
+#[tauri::command(rename_all = "camelCase")]
+fn server_config(state: State<'_, AppState>, id: String) -> Res<ServerConfig> {
+    state.engine.store.get_instance(&id).map_err(err)?;
+    Ok(server::config(state.engine.paths(), &id))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn save_server_config(state: State<'_, AppState>, id: String, config: ServerConfig) -> Res<()> {
+    state.engine.store.get_instance(&id).map_err(err)?;
+    if state.servers.is_busy(&id) { return Err("Wait for server startup to finish or stop the server before changing its settings".into()); }
+    server::save_config(state.engine.paths(), &id, &config).map_err(err)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn start_server(app: AppHandle, state: State<'_, AppState>, id: String) -> Res<()> {
+    let instance = state.engine.store.get_instance(&id).map_err(err)?;
+    let servers = state.servers.clone();
+    let store = state.engine.store.clone();
+    let sink: Arc<dyn EventSink> = Arc::new(TauriSink(app));
+    server::start(&servers, &store, &instance.id, sink).await.map_err(err)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn stop_server(state: State<'_, AppState>, id: String) -> Res<bool> {
+    state.engine.store.get_instance(&id).map_err(err)?;
+    let servers = state.servers.clone();
+    tokio::task::spawn_blocking(move || servers.stop(&id)).await.map_err(err)?.map_err(err)
+}
+
+#[tauri::command]
+async fn server_internet_info() -> Res<server::InternetInfo> {
+    server::internet_info().await.map_err(err)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn server_running(state: State<'_, AppState>, id: String) -> Res<bool> {
+    state.engine.store.get_instance(&id).map_err(err)?;
+    Ok(state.servers.is_running(&id))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn open_server_folder(state: State<'_, AppState>, id: String) -> Res<()> {
+    state.engine.store.get_instance(&id).map_err(err)?;
+    let dir = server::server_dir(state.engine.paths(), &id);
+    std::fs::create_dir_all(&dir).map_err(err)?;
+    open::that(dir).map_err(err)
+}
+
 #[tauri::command]
 fn open_instance_folder(state: State<'_, AppState>, id: String) -> Res<()> {
+    state.engine.store.get_instance(&id).map_err(err)?;
     let dir = state.engine.paths().game_dir(&id);
     std::fs::create_dir_all(&dir).map_err(err)?;
     open::that(dir).map_err(err)
@@ -383,6 +434,23 @@ async fn read_screenshot(state: State<'_, AppState>, path: String) -> Res<String
 async fn scan_instances(state: State<'_, AppState>) -> Res<Vec<solocraft_core::scan::Found>> {
     let paths = state.engine.paths().clone();
     tokio::task::spawn_blocking(move || solocraft_core::scan::scan(&solocraft_core::Store::new(paths))).await.map_err(err)
+}
+
+/// Collects local hardware/runtime readiness data. This is read-only and does not inspect personal files.
+#[tauri::command]
+async fn system_scan(state: State<'_, AppState>) -> Res<solocraft_core::booster::SystemReport> {
+    let paths = state.engine.paths().clone();
+    let java_paths = paths.clone();
+    let mut report = tokio::task::spawn_blocking(move || solocraft_core::booster::system_scan(&paths.root)).await.map_err(err)?;
+    report.java = solocraft_core::java::detect_installs(&java_paths).await;
+    let compatible_java = report.java.iter().any(|j| j.major >= 21 && {
+        let arch = j.arch.to_ascii_lowercase();
+        arch.contains("64") || arch.contains("amd64") || arch.contains("aarch64")
+    });
+    if !compatible_java {
+        report.diagnoses.push("No 64-bit Java 21+ runtime was found. Minecraft 1.20.5 and newer needs Java 21; use the launcher's Java installer or select a 64-bit Java runtime.".into());
+    }
+    Ok(report)
 }
 
 /// Copies one found instance into SoloCraft.
@@ -684,7 +752,7 @@ pub fn run() {
     let engine = Engine::new(loc.root.clone()).expect("could not create the SoloCraft data folder");
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState { engine, first_run: loc.first_run, storage_warning: loc.warning.clone(), ms_cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)) })
+        .manage(AppState { engine, first_run: loc.first_run, storage_warning: loc.warning.clone(), ms_cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)), servers: Arc::new(ServerHost::default()) })
         .invoke_handler(tauri::generate_handler![
             list_instances,
             create_instance,
@@ -702,6 +770,13 @@ pub fn run() {
             launch_instance,
             kill_instance,
             running_instances,
+            server_config,
+            save_server_config,
+            start_server,
+            stop_server,
+            server_internet_info,
+            server_running,
+            open_server_folder,
             open_instance_folder,
             open_data_folder,
             open_instance_subfolder,
@@ -735,6 +810,7 @@ pub fn run() {
             open_login_page,
             check_update,
             scan_instances,
+            system_scan,
             account_skin,
             minecraft_news,
             playtime_week,

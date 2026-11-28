@@ -10,6 +10,8 @@ public final class Tracker {
     private static final ArrayDeque<Long> LEFT = new ArrayDeque<>();
     private static final ArrayDeque<Long> RIGHT = new ArrayDeque<>();
     private static boolean prevL, prevR;
+    private static long lastAttack;
+    private static int combo;
 
     private Tracker() {}
 
@@ -37,4 +39,15 @@ public final class Tracker {
     public static int right() { return RIGHT.size(); }
     public static boolean leftDown() { return prevL; }
     public static boolean rightDown() { return prevR; }
+
+    public static void recordAttack() {
+        long now = System.currentTimeMillis();
+        combo = now - lastAttack <= 2000 ? combo + 1 : 1;
+        lastAttack = now;
+    }
+
+    public static int combo() {
+        if (System.currentTimeMillis() - lastAttack > 2000) combo = 0;
+        return combo;
+    }
 }

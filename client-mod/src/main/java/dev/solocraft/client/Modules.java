@@ -5,6 +5,9 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.network.ServerInfo;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.TntEntity;
+import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.item.ItemStack;
@@ -28,7 +31,11 @@ public final class Modules {
     /** A module that is just a few lines of text. */
     private abstract static class TextModule extends Module {
         TextModule(String id, String name, String desc, int x, int y, boolean on) {
-            super(id, name, desc, "HUD", on, true, x, y);
+            this(id, name, desc, "HUD", x, y, on);
+        }
+
+        TextModule(String id, String name, String desc, String category, int x, int y, boolean on) {
+            super(id, name, desc, category, on, true, x, y);
         }
 
         abstract List<String> lines(MinecraftClient mc);
@@ -61,6 +68,10 @@ public final class Modules {
 
         ALL.add(new TextModule("cps", "CPS", "Shows how many times per second you click.", 4, 48, true) {
             List<String> lines(MinecraftClient mc) { return List.of(Tracker.left() + " | " + Tracker.right() + " CPS"); }
+        });
+
+        ALL.add(new TextModule("combo", "Combo Counter", "Counts entity attack actions within a short window; it does not automate attacks.", 260, 224, false) {
+            List<String> lines(MinecraftClient mc) { int n = Tracker.combo(); return n == 0 ? List.of() : List.of("Combo: " + n); }
         });
 
         ALL.add(new Module("keys", "Keystrokes", "Shows your movement keys, mouse buttons and space bar.", "HUD", true, true, 4, 80) {
@@ -201,8 +212,157 @@ public final class Modules {
             }
         });
 
+        ALL.add(new TextModule("speed", "Speed", "Shows your current horizontal movement speed.", 260, 4, false) {
+            private double x, z, speed;
+            private boolean sampled;
+            @Override public void tick(MinecraftClient mc) {
+                if (mc.player == null) { sampled = false; speed = 0; return; }
+                double nx = mc.player.getX(), nz = mc.player.getZ();
+                if (sampled) speed = Math.min(100, Math.sqrt((nx - x) * (nx - x) + (nz - z) * (nz - z)) * 20.0);
+                x = nx; z = nz; sampled = true;
+            }
+            List<String> lines(MinecraftClient mc) { return List.of(String.format(java.util.Locale.ROOT, "Speed: %.2f blocks/s", speed)); }
+        });
+
+        ALL.add(new TextModule("saturation", "Saturation", "Shows your current food saturation.", 260, 26, false) {
+            List<String> lines(MinecraftClient mc) { return List.of(String.format(java.util.Locale.ROOT, "Saturation: %.1f", mc.player.getHungerManager().getSaturationLevel())); }
+        });
+
+        ALL.add(new TextModule("itemcount", "Item Counter", "Shows the selected item's name and stack count.", 260, 48, false) {
+            List<String> lines(MinecraftClient mc) {
+                ItemStack st = mc.player.getMainHandStack();
+                return st.isEmpty() ? List.of("Empty hand") : List.of(st.getName().getString() + " x" + st.getCount());
+            }
+        });
+
+        ALL.add(new TextModule("biome", "Biome", "Shows the biome you are standing in.", 260, 70, false) {
+            List<String> lines(MinecraftClient mc) {
+                return List.of("Biome: " + mc.world.getBiome(mc.player.getBlockPos()).getKey()
+                    .map(k -> k.getValue().toString()).orElse("unknown"));
+            }
+        });
+
+        ALL.add(new TextModule("light", "Light Level", "Shows the block light level at your position.", 260, 92, false) {
+            List<String> lines(MinecraftClient mc) { return List.of("Light: " + mc.world.getLightLevel(mc.player.getBlockPos())); }
+        });
+
+        ALL.add(new TextModule("reachdisplay", "Reach Display", "Displays distance to your current crosshair target; it does not change reach.", 260, 114, false) {
+            List<String> lines(MinecraftClient mc) {
+                if (mc.crosshairTarget == null || mc.crosshairTarget.getType().name().equals("MISS")) return List.of();
+                double d = mc.player.getEyePos().distanceTo(mc.crosshairTarget.getPos());
+                return List.of(String.format(java.util.Locale.ROOT, "Target distance: %.2f blocks", d));
+            }
+        });
+
+        ALL.add(new TextModule("durabilityalerts", "Durability Alerts", "Warns when equipped or hotbar gear is close to breaking.", 260, 136, false) {
+            List<String> lines(MinecraftClient mc) {
+                List<String> out = new ArrayList<>();
+                var inv = mc.player.getInventory();
+                for (int i = 0; i < inv.size() && out.size() < 4; i++) {
+                    ItemStack st = inv.getStack(i);
+                    if (st.isDamageable() && st.getMaxDamage() - st.getDamage() <= Math.max(1, st.getMaxDamage() / 10))
+                        out.add("Low durability: " + st.getName().getString());
+                }
+                return out;
+            }
+        });
+
+        ALL.add(new TextModule("targethealth", "Target Health", "Shows health points and hearts for the living mob or player under your crosshair.", 260, 158, true) {
+            List<String> lines(MinecraftClient mc) {
+                if (!(mc.crosshairTarget instanceof EntityHitResult hit) || !(hit.getEntity() instanceof LivingEntity target)) return List.of();
+                float health = Math.max(0, target.getHealth());
+                float maxHealth = Math.max(1, target.getMaxHealth());
+                int hearts = Math.round(health / 2f), maxHearts = Math.max(1, Math.round(maxHealth / 2f));
+                return List.of(String.format(java.util.Locale.ROOT, "%s: %.1f / %.1f HP (%d / %d ♥)",
+                    target.getName().getString(), health, maxHealth, hearts, maxHearts));
+            }
+        });
+
+        ALL.add(new TextModule("tnttimer", "TNT Timer", "Shows the fuse time of the nearest primed TNT within 16 blocks.", 260, 246, false) {
+            List<String> lines(MinecraftClient mc) {
+                TntEntity tnt = mc.world.getEntitiesByClass(TntEntity.class, mc.player.getBoundingBox().expand(16), e -> true)
+                    .stream().min(java.util.Comparator.comparingDouble(e -> mc.player.squaredDistanceTo(e))).orElse(null);
+                return tnt == null ? List.of() : List.of(String.format(java.util.Locale.ROOT, "TNT: %.1f s", Math.max(0, tnt.getFuse()) / 20.0));
+            }
+        });
+
+        ALL.add(new TextModule("packdisplay", "Pack Display", "Lists enabled resource packs.", 260, 268, false) {
+            List<String> lines(MinecraftClient mc) {
+                try {
+                    Object manager = mc.getResourcePackManager();
+                    for (var method : manager.getClass().getMethods()) {
+                        if (method.getName().equals("getEnabledProfiles") && method.getParameterCount() == 0) {
+                            Object value = method.invoke(manager);
+                            if (value instanceof java.util.Collection<?> profiles) {
+                                List<String> out = new ArrayList<>();
+                                for (Object profile : profiles) {
+                                    Object id = profile.getClass().getMethod("getId").invoke(profile);
+                                    out.add(id.toString());
+                                }
+                                if (!out.isEmpty()) return out;
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) { }
+                return List.of("No enabled resource packs");
+            }
+        });
+
+        ALL.add(new Module("waypoint", "Waypoint", "Press X to save your current position and show the distance to it.", "Utility", false, true, 260, 202) {
+            @Override public void tick(MinecraftClient mc) {
+                if (isEnabled() && mc.player != null && mc.currentScreen == null && Features.waypointKey != null) {
+                    while (Features.waypointKey.wasPressed()) {
+                        Config.get().waypoint = new int[]{mc.player.getBlockX(), mc.player.getBlockY(), mc.player.getBlockZ()};
+                        Config.save();
+                    }
+                }
+            }
+            @Override public int[] draw(DrawContext c, int x, int y, boolean editing) {
+                MinecraftClient mc = mc();
+                int[] p = Config.get().waypoint;
+                if (mc.player == null || p == null) return editing ? Hud.oneLine(c, x, y, "Waypoint (press X)") : new int[]{0, 0};
+                double d = mc.player.squaredDistanceTo(p[0] + .5, p[1] + .5, p[2] + .5);
+                return Hud.textBox(c, x, y, List.of("Waypoint: " + p[0] + " " + p[1] + " " + p[2], String.format(java.util.Locale.ROOT, "%.1f blocks", Math.sqrt(d))));
+            }
+        });
+
+        ALL.add(new TextModule("lagspike", "Lag Spike Detector", "Shows the most recent client tick delay over 100 ms.", "Performance", 260, 180, false) {
+            private long last, spike, seen;
+            @Override public void tick(MinecraftClient mc) {
+                long now = System.nanoTime();
+                if (last != 0) {
+                    long ms = (now - last) / 1_000_000;
+                    if (ms > 100) { spike = ms; seen = now; }
+                }
+                last = now;
+                if (now - seen > 5_000_000_000L) spike = 0;
+            }
+            List<String> lines(MinecraftClient mc) { return spike == 0 ? List.of() : List.of("Tick spike: " + spike + " ms"); }
+        });
+
+        ALL.add(new TextModule("framediagnostics", "Frame Diagnostics", "Shows a rolling 10-second average FPS, frame time, and 1% low.", "Performance", 260, 290, false) {
+            List<String> lines(MinecraftClient mc) {
+                if (FpsMetrics.windowSeconds() < 1) return List.of("Measuring frame times…");
+                String low = FpsMetrics.hasFullWindow() ? FpsMetrics.onePercentLow() + " FPS" : "collecting";
+                return List.of("Avg: " + FpsMetrics.averageFps() + " FPS | 1% low: " + low,
+                    String.format(java.util.Locale.ROOT, "Frame time: %.2f ms", FpsMetrics.averageMs()));
+            }
+        });
+
+        ALL.add(new TextModule("optimizationmods", "Optimization Mods", "Shows performance mods detected in this instance.", "Performance", 260, 314, false) {
+            List<String> lines(MinecraftClient mc) {
+                List<String> found = PerformanceIntegration.installedOptimizationMods();
+                return found.isEmpty() ? List.of("Optimizations: 0 / " + PerformanceIntegration.optimizationModTotal())
+                    : List.of("Optimizations: " + found.size() + " / " + PerformanceIntegration.optimizationModTotal(), String.join(", ", found));
+            }
+        });
+
+        ALL.add(new ActionModule("maxfpsprofile", "Max FPS Profile",
+            "Applies FPS Companion Max settings, keeps render and simulation distance at 12+ chunks, and detects optimization mods.",
+            "Performance", PerformanceIntegration::applyMaxFpsProfile));
+
         // ---- mechanics ----
-        ALL.add(new Module("sprint", "Toggle Sprint", "Always sprints while you walk forward.", "Mechanic", false, true, 4, 304) {
+        ALL.add(new Module("sprint", "Toggle Sprint", "Always sprints while you walk forward.", "Utility", false, true, 4, 304) {
             @Override
             public void tick(MinecraftClient mc) {
                 if (!isEnabled() || mc.player == null) return;
@@ -240,7 +400,7 @@ public final class Modules {
             }
         });
 
-        ALL.add(new Module("zoom", "Zoom", "Hold the Zoom key (C) to zoom in. Level is set in Settings.", "Mechanic", true, false, 0, 0) {
+        ALL.add(new Module("zoom", "Zoom", "Hold the Zoom key (C) to zoom in. Level is set in Settings.", "Visual", true, false, 0, 0) {
             private Object savedFov, savedSens;
             private boolean zooming;
 
@@ -281,7 +441,7 @@ public final class Modules {
             }
         });
 
-        ALL.add(new Module("freelook", "Free Look", "Hold the Free Look key (Left Alt) to look around without turning your player.", "Mechanic", true, false, 0, 0) {
+        ALL.add(new Module("freelook", "Free Look", "Hold the Free Look key (Left Alt) to look around without turning your player.", "Visual", true, false, 0, 0) {
             @Override
             public void stop(MinecraftClient mc) {
                 Features.freeEnd(mc);
@@ -298,7 +458,7 @@ public final class Modules {
             }
         });
 
-        ALL.add(new Module("togglesneak", "Toggle Sneak", "Press the sneak key once to sneak, again to stop.", "Mechanic", false, false, 0, 0) {
+        ALL.add(new Module("togglesneak", "Toggle Sneak", "Press the sneak key once to sneak, again to stop.", "Utility", false, false, 0, 0) {
             private Boolean saved;
 
             @Override
@@ -327,10 +487,22 @@ public final class Modules {
             }
         });
 
-        ALL.add(new Module("crosshair", "Crosshair Editor", "Replaces the crosshair with your own: shape, size and colour in Settings.", "Mechanic", false, false, 0, 0) {
+        ALL.add(new Module("perspective", "Quick Perspective", "Press V to switch between first person and rear third person.", "Utility", true, false, 0, 0) {
+            @Override public void tick(MinecraftClient mc) {
+                if (!isEnabled() || mc.currentScreen != null || Features.perspectiveKey == null) return;
+                while (Features.perspectiveKey.wasPressed()) {
+                    var current = mc.options.getPerspective();
+                    mc.options.setPerspective(current.isFirstPerson()
+                        ? net.minecraft.client.option.Perspective.THIRD_PERSON_BACK
+                        : net.minecraft.client.option.Perspective.FIRST_PERSON);
+                }
+            }
         });
 
-        ALL.add(new Module("fullbright", "Fullbright", "Makes everything fully lit, even in caves.", "Mechanic", false, false, 0, 0) {
+        ALL.add(new Module("crosshair", "Crosshair Editor", "Replaces the crosshair with your own: shape, size and colour in Settings.", "Visual", false, false, 0, 0) {
+        });
+
+        ALL.add(new Module("fullbright", "Fullbright", "Makes everything fully lit, even in caves.", "Visual", false, false, 0, 0) {
             private Object saved;
             private java.lang.reflect.Field fld;
 
@@ -377,6 +549,82 @@ public final class Modules {
                 } catch (Exception ignored) {
                     // keep the game running
                 }
+            }
+        });
+
+        ALL.add(new Module("hurtcam", "No Hurt Camera", "Disables the camera tilt when you take damage.", "Visual", false, false, 0, 0) {
+            private Object saved;
+            private Object option(MinecraftClient mc) throws Exception {
+                for (var method : mc.options.getClass().getMethods()) {
+                    if (method.getParameterCount() == 0 && method.getName().toLowerCase(java.util.Locale.ROOT).contains("damagetilt"))
+                        return method.invoke(mc.options);
+                }
+                throw new NoSuchMethodException("damage tilt option");
+            }
+            @Override public void stop(MinecraftClient mc) { restore(mc); }
+            private void restore(MinecraftClient mc) {
+                if (saved == null) return;
+                try { Gfx.rawSet(option(mc), saved); } catch (Exception ignored) {}
+                saved = null;
+            }
+            @Override public void tick(MinecraftClient mc) {
+                try {
+                    Object opt = option(mc);
+                    if (isEnabled()) {
+                        if (saved == null) saved = Gfx.rawGet(opt);
+                        Gfx.rawSet(opt, saved instanceof Double ? 0.0d : 0.0f);
+                    } else if (saved != null) restore(mc);
+                } catch (Exception ignored) { /* unavailable versions simply leave the option alone */ }
+            }
+        });
+
+        ALL.add(new Module("unfocusedfps", "Unfocused FPS Limit", "Temporarily caps the game at 30 FPS while its window is unfocused.", "Performance", false, false, 0, 0) {
+            private Object saved;
+            private Object option(MinecraftClient mc) throws Exception {
+                for (var method : mc.options.getClass().getMethods())
+                    if (method.getName().equals("getMaxFps") && method.getParameterCount() == 0) return method.invoke(mc.options);
+                throw new NoSuchMethodException("max FPS option");
+            }
+            private void restore(MinecraftClient mc) {
+                if (saved == null) return;
+                try { Gfx.rawSet(option(mc), saved); } catch (Exception ignored) {}
+                saved = null;
+            }
+            @Override public void stop(MinecraftClient mc) { restore(mc); }
+            @Override public void tick(MinecraftClient mc) {
+                try {
+                    Object opt = option(mc);
+                    if (!isEnabled()) { restore(mc); return; }
+                    if (saved == null) saved = Gfx.rawGet(opt);
+                    if (!mc.isWindowFocused() && saved instanceof Integer fps) Gfx.rawSet(opt, Math.min(fps, 30));
+                    else Gfx.rawSet(opt, saved);
+                } catch (Exception ignored) { }
+            }
+        });
+
+        ALL.add(new Module("particlelimiter", "Particle Limiter", "Temporarily uses minimal particles to reduce particle load.", "Performance", false, false, 0, 0) {
+            private Object saved;
+            private Object option(MinecraftClient mc) throws Exception {
+                for (var method : mc.options.getClass().getMethods())
+                    if (method.getName().equals("getParticles") && method.getParameterCount() == 0) return method.invoke(mc.options);
+                throw new NoSuchMethodException("particle option");
+            }
+            private void restore(MinecraftClient mc) {
+                if (saved == null) return;
+                try { Gfx.rawSet(option(mc), saved); } catch (Exception ignored) {}
+                saved = null;
+            }
+            @Override public void stop(MinecraftClient mc) { restore(mc); }
+            @Override public void tick(MinecraftClient mc) {
+                try {
+                    Object opt = option(mc);
+                    if (!isEnabled()) { restore(mc); return; }
+                    if (saved == null) saved = Gfx.rawGet(opt);
+                    if (saved instanceof Enum<?> e) {
+                        for (Object value : e.getDeclaringClass().getEnumConstants())
+                            if (value.toString().equalsIgnoreCase("MINIMAL")) { Gfx.rawSet(opt, value); break; }
+                    }
+                } catch (Exception ignored) { }
             }
         });
     }

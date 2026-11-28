@@ -830,9 +830,13 @@ fn host_allowed(url: &str) -> bool {
 }
 
 fn extract_overrides(zip_path: &Path, game_dir: &Path) -> Result<usize> {
+    const MAX_OUTPUT: u64 = 8 * 1024 * 1024 * 1024;
+    const MAX_ENTRIES: usize = 100_000;
     let f = std::fs::File::open(zip_path)?;
     let mut zip = zip::ZipArchive::new(f)?;
+    if zip.len() > MAX_ENTRIES { return Err(anyhow!("archive contains too many entries")); }
     let mut count = 0;
+    let mut expanded = 0u64;
     // overrides first, then client-overrides so they win
     for prefix in ["overrides/", "client-overrides/"] {
         for i in 0..zip.len() {
@@ -843,6 +847,8 @@ fn extract_overrides(zip_path: &Path, game_dir: &Path) -> Result<usize> {
                 continue;
             }
             let Some(rel) = safe_rel(rest) else { continue };
+            expanded = expanded.saturating_add(e.size());
+            if expanded > MAX_OUTPUT { return Err(anyhow!("archive expands beyond the 8 GiB safety limit")); }
             let out = game_dir.join(rel);
             if let Some(p) = out.parent() {
                 std::fs::create_dir_all(p)?;

@@ -21,6 +21,82 @@ pub struct Hardware {
     pub discrete_gpu: bool,
 }
 
+/// Read-only summary of the host used to explain Minecraft readiness.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemReport {
+    pub os: String,
+    pub architecture: String,
+    pub processor: String,
+    pub physical_cores: usize,
+    pub graphics_drivers: String,
+    pub hardware: Hardware,
+    pub available_ram_mb: u64,
+    pub free_disk_mb: Option<u64>,
+    pub java: Vec<crate::models::JavaInstall>,
+    pub diagnoses: Vec<String>,
+}
+
+pub fn system_scan(data_root: &Path) -> SystemReport {
+    let hardware = detect();
+    let available_ram_mb = available_ram_mb();
+    let (processor, physical_cores) = processor_info();
+    let graphics_drivers = if cfg!(windows) {
+        run("powershell", &["-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_VideoController | ForEach-Object { \"$($_.Name) | driver $($_.DriverVersion) | status $($_.ConfigManagerErrorCode)\" }) -join '; '"]).unwrap_or_default().trim().to_string()
+    } else {
+        run("sh", &["-c", "glxinfo -B 2>/dev/null | sed -n '/OpenGL vendor string:/p; /OpenGL renderer string:/p; /OpenGL version string:/p'"]).unwrap_or_default().trim().replace('\n', " · ")
+    };
+    let os = if cfg!(windows) {
+        run("powershell", &["-NoProfile", "-NonInteractive", "-Command", "$o=Get-CimInstance Win32_OperatingSystem; \"$($o.Caption) (build $($o.BuildNumber))\""]).unwrap_or_else(|| "Windows (version unavailable)".into()).trim().to_string()
+    } else if cfg!(target_os = "linux") {
+        std::fs::read_to_string("/etc/os-release").ok().and_then(|s| s.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=").map(|v| v.trim_matches('"').to_string()))).unwrap_or_else(|| "Linux".into())
+    } else { std::env::consts::OS.to_string() };
+    let free_disk_mb = if cfg!(windows) {
+        let root = data_root.to_string_lossy().replace('\'', "''");
+        run("powershell", &["-NoProfile", "-Command", &format!("$p='{}'; $d=[IO.Path]::GetPathRoot($p); $id=$d.Substring(0,2); (Get-CimInstance Win32_LogicalDisk -Filter \"DeviceID='$id'\").FreeSpace", root)]).and_then(|s| s.trim().parse::<u64>().ok()).map(|b| b / 1024 / 1024)
+    } else {
+        run("df", &["-Pk", &data_root.to_string_lossy()]).and_then(|s| s.lines().last().and_then(|l| l.split_whitespace().nth(3)?.parse::<u64>().ok())).map(|kb| kb / 1024)
+    };
+    let java = Vec::new();
+    let mut diagnoses = Vec::new();
+    if available_ram_mb > 0 && available_ram_mb < 2048 { diagnoses.push("Available memory is below 2 GB. Close memory-heavy apps before launching Minecraft.".into()); }
+    if hardware.ram_mb > 0 && hardware.ram_mb < 4096 { diagnoses.push("This device has less than 4 GB of RAM; use a small mod set and keep at least 1.5 GB for the operating system.".into()); }
+    if hardware.gpu.is_empty() { diagnoses.push("Could not identify a graphics adapter. Update the graphics driver and check that OpenGL is available.".into()); }
+    if cfg!(windows) { diagnose_windows_graphics(&graphics_drivers, !hardware.gpu.is_empty(), &mut diagnoses); }
+    if let Some(free) = free_disk_mb { if free < 4096 { diagnoses.push("Less than 4 GB is free on the launcher drive. Free disk space before installing or updating game files.".into()); } }
+    if diagnoses.is_empty() { diagnoses.push("No major hardware or storage issue was detected. Mod compatibility and graphics drivers can still affect launch performance.".into()); }
+    SystemReport { os, architecture: std::env::consts::ARCH.into(), processor, physical_cores, graphics_drivers, hardware, available_ram_mb, free_disk_mb, java, diagnoses }
+}
+
+fn diagnose_windows_graphics(details: &str, gpu_detected: bool, diagnoses: &mut Vec<String>) {
+    if details.split("; ").any(|g| g.ends_with("status 22") || g.ends_with("status 10")) {
+        diagnoses.push("Windows reports that a graphics adapter is disabled or failed to start (Device Manager status 10/22). Enable it or reinstall its driver, then restart the PC.".into());
+    }
+    if gpu_detected && details.is_empty() {
+        diagnoses.push("Windows found a graphics adapter but could not read its driver status through CIM. Check the adapter in Device Manager and install the manufacturer's driver if needed.".into());
+    }
+    if details.contains("driver ") && details.contains("driver  |") {
+        diagnoses.push("Windows did not return a graphics driver version. Install the latest driver from your PC or GPU manufacturer.".into());
+    }
+}
+
+fn processor_info() -> (String, usize) {
+    if cfg!(windows) {
+        let name = run("powershell", &["-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)"]).unwrap_or_default().trim().to_string();
+        let cores = run("powershell", &["-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_Processor | Measure-Object -Property NumberOfCores -Sum).Sum"]).and_then(|s| s.trim().parse().ok()).unwrap_or(0);
+        return (name, cores);
+    }
+    let info = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+    let name = info.lines().find_map(|l| l.strip_prefix("model name\t: ").map(str::to_owned)).unwrap_or_default();
+    let cores = info.lines().find_map(|l| l.strip_prefix("cpu cores\t: ").and_then(|s| s.parse().ok())).unwrap_or(0);
+    (name, cores)
+}
+
+fn available_ram_mb() -> u64 {
+    if cfg!(windows) { return run("powershell", &["-NoProfile", "-Command", "(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory"]).and_then(|s| s.trim().parse::<u64>().ok()).map(|kb| kb / 1024).unwrap_or(0); }
+    std::fs::read_to_string("/proc/meminfo").ok().and_then(|s| s.lines().find_map(|l| l.strip_prefix("MemAvailable:").and_then(|v| v.split_whitespace().next()?.parse::<u64>().ok()))).map(|kb| kb / 1024).unwrap_or(0)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tier {
     Potato,
@@ -156,9 +232,9 @@ pub fn recommend(hw: &Hardware) -> Tier {
 pub fn make_plan(hw: &Hardware, tier: Tier, already_boosted: bool) -> Plan {
     let ram = if hw.ram_mb == 0 { 8192 } else { hw.ram_mb };
     let (max_ram, render, sim, entity, particles, graphics, clouds, ao, blend, mip, shadows, fps): (u64, u32, u32, &str, u32, u32, &str, bool, u32, u32, bool, u32) = match tier {
-        Tier::Potato => ((ram * 2 / 5).clamp(1536, 3072), 6, 5, "0.5", 2, 0, "false", false, 1, 0, false, 120),
-        Tier::Balanced => ((ram / 4).clamp(3072, 6144), 10, 8, "0.75", 1, 1, "false", true, 3, 2, true, 144),
-        Tier::Performance => ((ram / 4).clamp(4096, 8192), 14, 8, "1.0", 1, 1, "false", true, 5, 4, true, 260),
+        Tier::Potato => ((ram * 2 / 5).clamp(1536, 3072), 12, 12, "0.5", 2, 0, "false", false, 1, 0, false, 120),
+        Tier::Balanced => ((ram / 4).clamp(3072, 6144), 12, 12, "0.75", 1, 1, "false", true, 3, 2, true, 144),
+        Tier::Performance => ((ram / 4).clamp(4096, 8192), 14, 12, "1.0", 1, 1, "false", true, 5, 4, true, 260),
     };
     // never give the game more than 60% of the RAM
     let max_ram = max_ram.min(ram * 3 / 5) as u32;
@@ -277,10 +353,17 @@ fn load_backup(paths: &Paths, id: &str) -> Option<Backup> {
     serde_json::from_str(&std::fs::read_to_string(backup_path(paths, id)).ok()?).ok()
 }
 
-fn remember_file(b: &mut Backup, game: &Path, rel: &str) {
+fn remember_file(b: &mut Backup, game: &Path, rel: &str) -> Result<()> {
     if !b.files.contains_key(rel) {
-        b.files.insert(rel.to_string(), std::fs::read_to_string(game.join(rel)).ok());
+        let path = game.join(rel);
+        let old = match std::fs::read_to_string(&path) {
+            Ok(value) => Some(value),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e).with_context(|| format!("backing up {}", path.display())),
+        };
+        b.files.insert(rel.to_string(), old);
     }
+    Ok(())
 }
 
 pub fn is_boosted(paths: &Paths, id: &str) -> bool {
@@ -332,7 +415,7 @@ pub async fn apply(
     };
 
     // 2. game settings
-    remember_file(&mut backup, &game, "options.txt");
+    remember_file(&mut backup, &game, "options.txt")?;
     let old = std::fs::read_to_string(game.join("options.txt")).unwrap_or_default();
     std::fs::write(game.join("options.txt"), patch_options(&old, &plan.options)).context("writing options.txt")?;
 
@@ -346,7 +429,7 @@ pub async fn apply(
             .unwrap_or(false);
     if sodium_installed {
         let rel = "config/sodium-options.json";
-        remember_file(&mut backup, &game, rel);
+        remember_file(&mut backup, &game, rel)?;
         let mut cur: serde_json::Value = std::fs::read_to_string(game.join(rel))
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
@@ -444,5 +527,21 @@ mod tests {
         assert_eq!(cur["quality"]["leaves_quality"], "DEFAULT");
         assert_eq!(cur["advanced"]["x"], 1);
         assert_eq!(cur["performance"]["use_block_face_culling"], true);
+    }
+
+    #[test]
+    fn windows_graphics_failure_is_explained() {
+        let mut findings = Vec::new();
+        diagnose_windows_graphics("Intel UHD | driver 31.0 | status 22", true, &mut findings);
+        assert!(findings.iter().any(|d| d.contains("Device Manager status 10/22")));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_system_scan_reads_windows_cim_data() {
+        let report = system_scan(&std::env::temp_dir());
+        assert!(report.os.to_lowercase().contains("windows"));
+        assert!(!report.processor.is_empty());
+        assert!(report.hardware.ram_mb > 0);
     }
 }

@@ -332,7 +332,22 @@ fn load_secrets(store: &Store) -> HashMap<String, Secret> {
 
 fn save_secrets(store: &Store, m: &HashMap<String, Secret>) -> Result<()> {
     std::fs::create_dir_all(&store.paths.root)?;
-    std::fs::write(secrets_path(store), serde_json::to_vec_pretty(m)?)?;
+    let path = secrets_path(store);
+    let tmp = path.with_extension("json.tmp");
+    let bytes = serde_json::to_vec_pretty(m)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = std::fs::OpenOptions::new().create(true).truncate(true).write(true).mode(0o600).open(&tmp)?;
+        std::io::Write::write_all(&mut f, &bytes)?;
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+    }
+    #[cfg(not(unix))]
+    std::fs::write(&tmp, bytes)?;
+    #[cfg(windows)]
+    if path.exists() { std::fs::remove_file(&path)?; }
+    std::fs::rename(&tmp, &path)?;
     Ok(())
 }
 

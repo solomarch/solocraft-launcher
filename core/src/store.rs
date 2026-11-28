@@ -76,12 +76,14 @@ impl Store {
     }
 
     pub fn get_instance(&self, id: &str) -> Result<Instance> {
+        validate_instance_id(id)?;
         let b = std::fs::read(self.paths.instance_file(id))
             .map_err(|_| anyhow!("Instance {id} was not found"))?;
         Ok(serde_json::from_slice(&b)?)
     }
 
     pub fn save_instance(&self, inst: &Instance) -> Result<()> {
+        validate_instance_id(&inst.id)?;
         std::fs::create_dir_all(self.paths.game_dir(&inst.id))?;
         write_json(&self.paths.instance_file(&inst.id), inst)
     }
@@ -120,6 +122,7 @@ impl Store {
     }
 
     pub fn delete_instance(&self, id: &str) -> Result<()> {
+        validate_instance_id(id)?;
         let dir = self.paths.instance_dir(id);
         if dir.exists() {
             std::fs::remove_dir_all(dir)?;
@@ -200,6 +203,13 @@ impl Store {
         }
         store.accounts.first().cloned()
     }
+}
+
+fn validate_instance_id(id: &str) -> Result<()> {
+    if id.is_empty() || id.len() > 64 || !id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-') || id.starts_with('-') || id.ends_with('-') {
+        return Err(anyhow!("Invalid instance ID"));
+    }
+    Ok(())
 }
 
 fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<()> {

@@ -25,6 +25,7 @@ public final class Config {
     public int crossStyle = 0;
     public int crossColor = 0;
     public int crossSize = 6;        // 2..14
+    public int[] waypoint;
 
     public static final int[] ACCENTS = {0xFF6C5CE7, 0xFF2E86DE, 0xFF10AC84, 0xFFEE5A24, 0xFFE84393};
     public static final String[] ACCENT_NAMES = {"Purple", "Blue", "Green", "Orange", "Pink"};
@@ -49,6 +50,7 @@ public final class Config {
                     if (c.enabled == null) c.enabled = new HashMap<>();
                     if (c.positions == null) c.positions = new HashMap<>();
                     if (c.favourites == null) c.favourites = new HashSet<>();
+                    if (c.waypoint != null && c.waypoint.length != 3) c.waypoint = null;
                     if (c.scale < 0.5f || c.scale > 2.0f) c.scale = 1.25f;
                     if (c.menuScale < 0.8f || c.menuScale > 2.5f) c.menuScale = 1.5f;
                     c.zoomLevel = Math.max(2, Math.min(10, c.zoomLevel == 0 ? 4 : c.zoomLevel));

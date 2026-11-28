@@ -5,22 +5,20 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.option.KeyBinding;
 import org.lwjgl.glfw.GLFW;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-
 /** State and helpers for Zoom, Free Look and the Crosshair Editor. */
 public final class Features {
     private Features() {}
 
-    public static KeyBinding zoomKey, freeKey;
+    public static KeyBinding zoomKey, freeKey, perspectiveKey, waypointKey;
 
     public static final String[] CROSS_STYLES = {"Cross", "Dot", "Plus + dot", "Ring", "Corners"};
     public static final String[] CROSS_COLORS = {"White", "Red", "Green", "Cyan", "Yellow", "Pink"};
     private static final int[] COLORS = {0xFFFFFFFF, 0xFFFF4D4D, 0xFF4DFF6E, 0xFF4DE1FF, 0xFFFFE14D, 0xFFFF7AD9};
 
     public static boolean held(KeyBinding k, int fallbackCode) {
-        if (k != null) return k.isPressed();
-        return Input.keyDown(fallbackCode);
+        // Poll GLFW as well as the keybinding state: some desktop/window-manager key grabs
+        // (notably Alt on Linux) prevent Minecraft's keybinding state from updating reliably.
+        return (k != null && k.isPressed()) || Input.keyDown(fallbackCode);
     }
 
     public static boolean zoomHeld() {
@@ -34,9 +32,6 @@ public final class Features {
     // ---------------- Free Look ----------------
     public static volatile boolean freeActive;
     public static float freeYaw, freePitch;
-    private static Method setRotation;
-    private static boolean setRotationTried;
-
     private static net.minecraft.client.option.Perspective savedPerspective;
 
     /** Starts Free Look: camera goes to third person behind the player and then orbits freely. */
@@ -74,29 +69,6 @@ public final class Features {
     public static void freeLookMouse(double dx, double dy) {
         freeYaw += (float) dx * 0.15f;
         freePitch = Math.max(-90f, Math.min(90f, freePitch + (float) dy * 0.15f));
-    }
-
-    /** Called by the camera mixin after the game placed the camera. */
-    public static void applyFreeLookCamera(Object camera) {
-        if (!freeActive) return;
-        if (!setRotationTried) {
-            setRotationTried = true;
-            for (Method m : camera.getClass().getDeclaredMethods()) {
-                Class<?>[] p = m.getParameterTypes();
-                if (!Modifier.isStatic(m.getModifiers()) && p.length == 2 && p[0] == float.class && p[1] == float.class
-                        && m.getReturnType() == void.class) {
-                    m.setAccessible(true);
-                    setRotation = m;
-                }
-            }
-            if (setRotation == null) SoloClient.LOG.warn("Free Look: this Minecraft version has no camera rotation method I recognise");
-        }
-        if (setRotation == null) return;
-        try {
-            setRotation.invoke(camera, freeYaw, freePitch);
-        } catch (Exception e) {
-            setRotation = null;
-        }
     }
 
     // ---------------- Crosshair ----------------

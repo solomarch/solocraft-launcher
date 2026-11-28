@@ -69,6 +69,7 @@ To remove it: uninstall *SM Craft* from Windows Settings → Apps, or on Linux d
 - **FPS pack:** Sodium, Lithium, FerriteCore, ModernFix, ImmediatelyFast, Entity Culling and friends in one click
 - **Java handling:** finds installed Java or downloads the right one for each Minecraft version
 - **Storage:** keep all game data on any drive (Settings → Storage), moved with a verified copy
+- **Server hosting:** start a separate Vanilla or Fabric server per instance, with Online/Offline authentication, port and player settings
 - **Launch progress** with a time estimate, and plain-language crash explanations
 - **SM Craft Client** (in-game menu): see below
 
@@ -79,7 +80,7 @@ coordinates, ping, armor status, potion effects, memory, clock, direction, day c
 plus Toggle Sprint and Fullbright. *Edit HUD Layout* lets you drag every element where you want it.
 
 - Install per instance: open the instance → **Mods** → **SM Craft Client → Install**
-  (Fabric instances, Minecraft 1.20 – 1.21.4 for now).
+  (Fabric instances, Minecraft 1.20 – 1.21.11).
 - It needs Fabric API; the launcher installs that for you.
 - Newer Minecraft versions (1.21.5+, 26.x) are planned.
 

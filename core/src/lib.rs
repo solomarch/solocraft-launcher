@@ -19,6 +19,7 @@ pub mod paths;
 pub mod home;
 pub mod maps;
 pub mod scan;
+pub mod server;
 pub mod storage;
 pub mod store;
 pub mod update;

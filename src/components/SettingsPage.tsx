@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, DeviceCode, errText, Settings } from "../lib/api";
+import { api, DeviceCode, errText, Settings, SystemReport } from "../lib/api";
 import { useApp } from "../store/app";
 import { Icon } from "./Icon";
 import { StorageCard } from "./Storage";
@@ -28,6 +28,15 @@ export function SettingsPage() {
   const [newGroup, setNewGroup] = useState("");
   const [device, setDevice] = useState<DeviceCode | null>(null);
   const [verifying, setVerifying] = useState<string | null>(null);
+  const [systemReport, setSystemReport] = useState<SystemReport | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  const scanSystem = async () => {
+    setScanning(true);
+    try { setSystemReport(await api.systemScan()); }
+    catch (e) { toast(errText(e), "error"); }
+    finally { setScanning(false); }
+  };
 
   const startMs = async () => {
     try {
@@ -148,6 +157,22 @@ export function SettingsPage() {
       </div>
 
       <StorageCard />
+
+      <div className="card wide">
+        <h3>System scan &amp; diagnosis</h3>
+        <p className="muted">Checks hardware, Windows/Linux graphics-driver status, free space, and Java compatibility. This is a read-only system check; it does not scan personal files.</p>
+        <button className="btn primary" onClick={scanSystem} disabled={scanning}>{scanning ? "Scanning this device…" : "Scan this device"}</button>
+        {systemReport && <div style={{ marginTop: 12 }}>
+          <div><strong>{systemReport.os}</strong> · {systemReport.architecture}</div>
+          <div className="muted">Processor: {systemReport.processor || "Not identified"} · {systemReport.physicalCores || "?"} cores / {systemReport.hardware.threads} logical threads</div>
+          <div className="muted">RAM: {Math.round(systemReport.hardware.ramMb / 1024 * 10) / 10} GB total, {Math.round(systemReport.availableRamMb / 1024 * 10) / 10} GB available</div>
+          <div className="muted">Graphics: {systemReport.hardware.gpu || "Not identified"}{systemReport.hardware.discreteGpu ? " · dedicated GPU detected" : " · integrated/unknown GPU"}</div>
+          {systemReport.graphicsDrivers && <div className="muted">Graphics driver: {systemReport.graphicsDrivers}</div>}
+          <div className="muted">Launcher drive: {systemReport.freeDiskMb != null ? `${Math.round(systemReport.freeDiskMb / 1024 * 10) / 10} GB free` : "Free space unavailable"}</div>
+          <div className="muted">Java: {systemReport.java.length ? systemReport.java.map(j => `Java ${j.major} ${j.arch || ""} (${j.vendor || "unknown vendor"})`).join(", ") : "No Java installation detected"}</div>
+          <ul>{systemReport.diagnoses.map((d, i) => <li key={i}>{d}</li>)}</ul>
+        </div>}
+      </div>
 
       <div className="card">
         <h3>Appearance</h3>

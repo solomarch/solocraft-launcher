@@ -5,6 +5,13 @@ on:
   pull_request:
 
 jobs:
+  windows-core:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - run: cargo test -p solocraft-core
   check:
     runs-on: ubuntu-22.04
     steps:

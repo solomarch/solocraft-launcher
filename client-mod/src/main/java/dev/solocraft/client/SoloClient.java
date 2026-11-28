@@ -44,6 +44,12 @@ public class SoloClient implements ClientModInitializer {
 
         Features.zoomKey = register(Gfx.newKey("key.solocraft.zoom", GLFW.GLFW_KEY_C));
         Features.freeKey = register(Gfx.newKey("key.solocraft.freelook", GLFW.GLFW_KEY_LEFT_ALT));
+        Features.perspectiveKey = register(Gfx.newKey("key.solocraft.perspective", GLFW.GLFW_KEY_V));
+        Features.waypointKey = register(Gfx.newKey("key.solocraft.waypoint", GLFW.GLFW_KEY_X));
+        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (player == MinecraftClient.getInstance().player) Tracker.recordAttack();
+            return net.minecraft.util.ActionResult.PASS;
+        });
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> {
             try {
@@ -106,6 +112,7 @@ public class SoloClient implements ClientModInitializer {
         HudRenderCallback.EVENT.register((ctx, tickCounter) -> {
             try {
                 MinecraftClient mc = MinecraftClient.getInstance();
+                FpsMetrics.capture(mc);
                 if (mc.player == null || mc.options.hudHidden) return;
                 Tracker.update(mc);
                 // The layout editor draws the modules itself.
